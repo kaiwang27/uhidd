@@ -41,19 +41,15 @@ __FBSDID("$FreeBSD$");
 MALLOC_DECLARE(M_UVHID);
 MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
-struct hidctl_softc;
-
-struct hid_softc {
-	struct hidctl_softc *hidctl;
-};
-
-struct hidctl_softc {
-	struct hid_softc *hid;
+struct uvhid_softc {
+	struct mtx	uvhid_mtx;
 };
 
 static void
 hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
     struct cdev **dev);
+static void
+hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
 static d_open_t		hidctl_open;
 static d_close_t	hidctl_close;
 static d_read_t		hidctl_read;
@@ -119,6 +115,7 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 	}
 
 	/* Create hid device node. */
+	hid_dev = NULL;
 	if (clone_create(&hid_clones, &hid_cdevsw, &unit, dev, 0)) {
 		hid_dev = make_dev(&hid_cdevsw, unit, UID_ROOT, GID_WHEEL,
 		    0600, UVHID_NAME "%d", unit);
@@ -128,7 +125,21 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 		}
 	}
 
-	/* Hook the hidctl and hid pair. */
+	if (hid_dev == NULL)
+		return;
+
+	hidctl_init(*dev, hid_dev);
+}
+
+static void
+hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
+{
+	struct uvhid_softc *sc;
+
+	sc = malloc(sizeof(*sc), M_UVHID, M_WAITOK|M_ZERO);
+	mtx_init(&sc->uvhid_mtx, "uvhid", NULL, MTX_DEF);
+	hidctl_dev->si_drv1 = sc;
+	hid_dev->si_drv1 = sc;
 }
 
 static int
