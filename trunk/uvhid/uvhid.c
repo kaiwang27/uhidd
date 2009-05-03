@@ -60,7 +60,6 @@ static d_read_t		hidctl_read;
 static d_write_t	hidctl_write;
 static d_ioctl_t	hidctl_ioctl;
 static d_poll_t		hidctl_poll;
-
 static d_open_t		hid_open;
 static d_close_t	hid_close;
 static d_read_t		hid_read;
@@ -82,17 +81,18 @@ static struct cdevsw hidctl_cdevsw = {
 
 static struct cdevsw hid_cdevsw = {
 	.d_version = D_VERSION,
-	.d_flags = D_NEEDMINOR,
-	.d_open = hid_open,
-	.d_close = hid_close,
-	.d_read = hid_read,
-	.d_write = hid_write,
-	.d_ioctl = hid_ioctl,
-	.d_poll = hid_poll,
-	.d_name = UVHID_NAME,
+	.d_flags   = D_NEEDMINOR,
+	.d_open	   = hid_open,
+	.d_close   = hid_close,
+	.d_read	   = hid_read,
+	.d_write   = hid_write,
+	.d_ioctl   = hid_ioctl,
+	.d_poll	   = hid_poll,
+	.d_name	   = UVHID_NAME,
 };
 
 static struct clonedevs	*hidctl_clones = NULL;
+static struct clonedevs	*hid_clones = NULL;
 
 static void
 hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
@@ -119,8 +119,14 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 	}
 
 	/* Create hid device node. */
-	hid_dev = make_dev(&hid_cdevsw, unit, UID_ROOT, GID_WHEEL,
-	    0600, UVHID_NAME "%d", unit);
+	if (clone_create(&hid_clones, &hid_cdevsw, &unit, dev, 0)) {
+		hid_dev = make_dev(&hid_cdevsw, unit, UID_ROOT, GID_WHEEL,
+		    0600, UVHID_NAME "%d", unit);
+		if (hid_dev != NULL) {
+			dev_ref(hid_dev);
+			hid_dev->si_flags |= SI_CHEAPCLONE;
+		}
+	}
 
 	/* Hook the hidctl and hid pair. */
 }
@@ -219,6 +225,7 @@ uvhid_modevent(module_t mod, int type, void *data)
 	switch (type) {
 	case MOD_LOAD:
 		clone_setup(&hidctl_clones);
+		clone_setup(&hid_clones);
 		tag = EVENTHANDLER_REGISTER(dev_clone, hidctl_clone, 0, 1000);
 		if (tag == NULL) {
 			clone_cleanup(&hidctl_clones);
@@ -229,6 +236,7 @@ uvhid_modevent(module_t mod, int type, void *data)
 	case MOD_UNLOAD:
 		EVENTHANDLER_DEREGISTER(dev_clone, tag);
 		clone_cleanup(&hidctl_clones);
+		clone_cleanup(&hid_clones);
 		break;
 
 	default:
