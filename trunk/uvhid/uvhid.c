@@ -37,12 +37,28 @@ __FBSDID("$FreeBSD$");
 
 #define	UVHID_NAME	"uvhid"
 #define	UVHIDCTL_NAME	"uvhidctl"
+#define	UVHID_QUEUE_SIZE	10240
+#define	UVHID_MAX_REPORT_SIZE	255
 
 MALLOC_DECLARE(M_UVHID);
 MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
+struct rqueue {
+	int		 cc;
+	unsigned char	 q[UVHID_QUEUE_SIZE];
+	unsigned char	*head;
+	unsigned char	*tail;
+};
+
 struct uvhid_softc {
-	struct mtx	uvhid_mtx;
+	struct rqueue	us_rq;
+	struct rqueue	us_wq;
+	struct mtx	us_mtx;
+
+#define	HIDCTL_OPEN	(1 << 0)	/* hidctl device is open */
+#define	HID_OPEN	(1 << 1)	/* hid device is open */
+
+	int		us_flags;
 };
 
 static void
@@ -137,7 +153,7 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 	struct uvhid_softc *sc;
 
 	sc = malloc(sizeof(*sc), M_UVHID, M_WAITOK|M_ZERO);
-	mtx_init(&sc->uvhid_mtx, "uvhid", NULL, MTX_DEF);
+	mtx_init(&sc->us_mtx, "uvhid", NULL, MTX_DEF);
 	hidctl_dev->si_drv1 = sc;
 	hid_dev->si_drv1 = sc;
 }
@@ -227,6 +243,101 @@ hid_poll(struct cdev *dev, int events, struct thread *td)
 
 	return (0);
 }
+
+static void
+report_dequeue(struct rqueue *rq, char *dst, int *size)
+{
+	int len, part1, part2;
+
+	if (rq->cc == 0) {
+		if (size)
+			*size = 0;
+		return;
+	}
+
+	len = (unsigned char) *rq->head++;
+	rq->cc--;
+	if (len > rq->cc)
+		len = rq->cc;
+	if (len == 0) {
+		if (size)
+			*size = 0;
+		return;
+	}
+
+	part1 = UVHID_QUEUE_SIZE - (rq->head - rq->q);
+	if (part1 > len)
+		part1 = len;
+	part2 = len - part1;
+
+	if (part1 > 0) {
+		if (dst) {
+			memcpy(dst, rq->head, part1);
+			dst += part1;
+		}
+		rq->head += part1;
+		rq->cc -= part1;
+	}
+
+	if (rq->head == rq->q + UVHID_QUEUE_SIZE)
+		rq->head = rq->q;
+
+	if (part2 > 0) {
+		if (dst)
+			memcpy(dst, rq->head, part2);
+		rq->head += part2;
+		rq->cc -= part2;
+	}
+
+	if (size)
+		*size = len;
+}
+
+static void
+report_enqueue(struct rqueue *rq, char *src, int size)
+{
+	int len, part1, part2;
+
+	if (size > UVHID_MAX_REPORT_SIZE || size <= 0)
+		return;
+
+	/* Discard the oldest reports if not enough room left. */
+	len = size + 1;
+	while (len > UVHID_QUEUE_SIZE - rq->cc)
+		report_dequeue(rq, NULL, NULL);
+
+	part1 = UVHID_QUEUE_SIZE - (rq->tail - rq->q);
+	if (part1 > len)
+		part1 = len;
+	part2 = len - part1;
+
+	if (part1 > 0) {
+		*rq->tail++ = (unsigned char) size;
+		rq->cc++;
+		part1--;
+
+		memcpy(rq->tail, src, part1);
+		src += part1;
+		rq->tail += part1;
+		rq->cc += part1;
+	}
+
+	if (rq->tail == rq->q + UVHID_QUEUE_SIZE)
+		rq->tail = rq->q;
+
+	if (part2 > 0) {
+		if (part1 == 0) {
+			*rq->tail++ = (unsigned char) size;
+			rq->cc++;
+			part2--;
+		}
+
+		memcpy(rq->tail, src, part2);
+		rq->tail += part2;
+		rq->cc += part2;
+	}
+}
+
 
 static int
 uvhid_modevent(module_t mod, int type, void *data)
