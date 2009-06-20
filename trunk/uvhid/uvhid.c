@@ -232,7 +232,9 @@ hidctl_read_again:
 	len = 0;
 	if (sc->us_wq.cc > 0) {
 		rq_dequeue(&sc->us_wq, buf, &len);
+		UVHID_UNLOCK(sc);
 		err = uiomove(buf, len, uio);
+		UVHID_LOCK(sc);
 	} else {
 		if (flag & O_NONBLOCK) {
 			err = EWOULDBLOCK;
@@ -271,7 +273,9 @@ hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 
 	sc->us_flags |= HIDCTL_WRITE;
 	size = uio->uio_resid;
+	UVHID_UNLOCK(sc);
 	err = uiomove(buf, size, uio);
+	UVHID_LOCK(sc);
 	if (err != 0)
 		goto hidctl_write_done;
 	rq_enqueue(&sc->us_rq, buf, size);
@@ -359,7 +363,9 @@ hid_read_again:
 	len = 0;
 	if (sc->us_rq.cc > 0) {
 		rq_dequeue(&sc->us_rq, buf, &len);
+		UVHID_UNLOCK(sc);
 		err = uiomove(buf, len, uio);
+		UVHID_LOCK(sc);
 	} else {
 		if (flag & O_NONBLOCK) {
 			err = EWOULDBLOCK;
@@ -398,7 +404,9 @@ hid_write(struct cdev *dev, struct uio *uio, int flag)
 
 	sc->us_flags |= HID_WRITE;
 	size = uio->uio_resid;
+	UVHID_UNLOCK(sc);
 	err = uiomove(buf, uio->uio_resid, uio);
+	UVHID_LOCK(sc);
 	if (err != 0)
 		goto hid_write_done;
 	rq_enqueue(&sc->us_wq, buf, size);
