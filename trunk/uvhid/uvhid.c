@@ -29,11 +29,13 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/conf.h>
+#include <sys/fcntl.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/malloc.h>
 #include <sys/systm.h>
 #include <sys/taskqueue.h>
+#include <sys/uio.h>
 
 #define	UVHID_NAME	"uvhid"
 #define	UVHIDCTL_NAME	"uvhidctl"
@@ -45,6 +47,8 @@ MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
 #define UVHID_LOCK(s)		mtx_lock(&(s)->us_mtx)
 #define UVHID_UNLOCK(s)		mtx_unlock(&(s)->us_mtx)
+#define	UVHID_SLEEP(s, f, d, t) \
+	msleep(&(s)->f, &(s)->us_mtx, PCATCH | (PZERO + 1), d, t)
 
 struct rqueue {
 	int		 cc;
@@ -60,15 +64,19 @@ struct uvhid_softc {
 
 #define	HIDCTL_OPEN	(1 << 0)	/* hidctl device is open */
 #define	HID_OPEN	(1 << 1)	/* hid device is open */
+#define	HIDCTL_READ	(1 << 2)	/* hidctl read pending */
+#define	HID_READ	(1 << 3)	/* hid read pending */
+#define	HIDCTL_WRITE	(1 << 2)	/* hidctl write pending */
+#define	HID_WRITE	(1 << 3)	/* hid write pending */
 
 	int		us_flags;
 };
 
-static void
-hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
-    struct cdev **dev);
-static void
-hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
+static void	hidctl_clone(void *arg, struct ucred *cred, char *name,
+    int namelen, struct cdev **dev);
+static void	hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
+static void	report_dequeue(struct rqueue *rq, char *dst, int *size);
+static void	report_enqueue(struct rqueue *rq, char *src, int size);
 static d_open_t		hidctl_open;
 static d_close_t	hidctl_close;
 static d_read_t		hidctl_read;
@@ -205,15 +213,74 @@ hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hidctl_read(struct cdev *dev, struct uio *uio, int flag)
 {
+	struct uvhid_softc *sc;
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int len, err;
 
-	return (0);
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HIDCTL_READ) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+	sc->us_flags |= HIDCTL_READ;
+
+hidctl_read_again:
+	len = 0;
+	if (sc->us_wq.cc > 0) {
+		report_dequeue(&sc->us_wq, buf, &len);
+		err = uiomove(buf, len, uio);
+	} else {
+		if (flag & O_NONBLOCK) {
+			err = EWOULDBLOCK;
+			goto hidctl_read_done;
+		}
+		err = UVHID_SLEEP(sc, us_wq, "hidctlr", 0);
+		if (err != 0)
+			goto hidctl_read_done;
+		goto hidctl_read_again;
+	}
+
+hidctl_read_done:
+
+	sc->us_flags &= ~HIDCTL_READ;
+
+	UVHID_UNLOCK(sc);
+
+	return (err);
 }
 
 static int
 hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 {
+	struct uvhid_softc *sc;
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int err;
 
-	return (0);
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HIDCTL_WRITE) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+
+	sc->us_flags |= HIDCTL_WRITE;
+	err = uiomove(buf, uio->uio_resid, uio);
+	if (err != 0)
+		goto hidctl_write_done;
+	report_enqueue(&sc->us_rq, buf, uio->uio_resid);
+
+hidctl_write_done:
+
+	sc->us_flags &= ~HIDCTL_WRITE;
+
+	UVHID_UNLOCK(sc);
+
+	return (err);
 }
 
 static int
