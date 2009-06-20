@@ -301,6 +301,20 @@ hidctl_poll(struct cdev *dev, int events, struct thread *td)
 static int
 hid_open(struct cdev *dev, int flag, int mode, struct thread *td)
 {
+	struct uvhid_softc *sc;
+
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HID_OPEN) {
+		UVHID_UNLOCK(sc);
+		return (EBUSY);
+	}
+
+	sc->us_flags |= HID_OPEN;
+
+	UVHID_UNLOCK(sc);
 
 	return (0);
 }
@@ -308,6 +322,15 @@ hid_open(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 {
+	struct uvhid_softc *sc;
+
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	sc->us_flags &= ~HID_OPEN;
+
+	UVHID_UNLOCK(sc);
 
 	return (0);
 }
@@ -315,15 +338,74 @@ hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hid_read(struct cdev *dev, struct uio *uio, int flag)
 {
+	struct uvhid_softc *sc;
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int len, err;
 
-	return (0);
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HID_READ) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+	sc->us_flags |= HID_READ;
+
+hid_read_again:
+	len = 0;
+	if (sc->us_rq.cc > 0) {
+		report_dequeue(&sc->us_rq, buf, &len);
+		err = uiomove(buf, len, uio);
+	} else {
+		if (flag & O_NONBLOCK) {
+			err = EWOULDBLOCK;
+			goto hid_read_done;
+		}
+		err = UVHID_SLEEP(sc, us_rq, "hidr", 0);
+		if (err != 0)
+			goto hid_read_done;
+		goto hid_read_again;
+	}
+
+hid_read_done:
+
+	sc->us_flags &= ~HID_READ;
+
+	UVHID_UNLOCK(sc);
+
+	return (err);
 }
 
 static int
 hid_write(struct cdev *dev, struct uio *uio, int flag)
 {
+	struct uvhid_softc *sc;
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int err;
 
-	return (0);
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HID_WRITE) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+
+	sc->us_flags |= HID_WRITE;
+	err = uiomove(buf, uio->uio_resid, uio);
+	if (err != 0)
+		goto hid_write_done;
+	report_enqueue(&sc->us_wq, buf, uio->uio_resid);
+
+hid_write_done:
+
+	sc->us_flags &= ~HID_WRITE;
+
+	UVHID_UNLOCK(sc);
+
+	return (err);
 }
 
 static int
