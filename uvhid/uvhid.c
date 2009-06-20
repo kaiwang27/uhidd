@@ -43,6 +43,9 @@ __FBSDID("$FreeBSD$");
 MALLOC_DECLARE(M_UVHID);
 MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
+#define UVHID_LOCK(s)		mtx_lock(&(s)->us_mtx)
+#define UVHID_UNLOCK(s)		mtx_unlock(&(s)->us_mtx)
+
 struct rqueue {
 	int		 cc;
 	unsigned char	 q[UVHID_QUEUE_SIZE];
@@ -161,6 +164,20 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 static int
 hidctl_open(struct cdev *dev, int flag, int mode, struct thread *td)
 {
+	struct uvhid_softc *sc;
+
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	if (sc->us_flags & HIDCTL_OPEN) {
+		UVHID_UNLOCK(sc);
+		return (EBUSY);
+	}
+
+	sc->us_flags |= HIDCTL_OPEN;
+
+	UVHID_UNLOCK(sc);
 
 	return (0);
 }
@@ -168,6 +185,19 @@ hidctl_open(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 {
+	struct uvhid_softc *sc;
+
+	sc = dev->si_drv1;
+
+	UVHID_LOCK(sc);
+
+	sc->us_flags &= ~HIDCTL_OPEN;
+	sc->us_rq.cc = 0;
+	sc->us_rq.head = sc->us_rq.tail = sc->us_rq.q;
+	sc->us_wq.cc = 0;
+	sc->us_wq.head = sc->us_wq.tail = sc->us_wq.q;
+
+	UVHID_UNLOCK(sc);
 
 	return (0);
 }
