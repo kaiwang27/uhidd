@@ -75,8 +75,9 @@ struct uvhid_softc {
 static void	hidctl_clone(void *arg, struct ucred *cred, char *name,
     int namelen, struct cdev **dev);
 static void	hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
-static void	report_dequeue(struct rqueue *rq, char *dst, int *size);
-static void	report_enqueue(struct rqueue *rq, char *src, int size);
+static void	rq_reset(struct rqueue *rq);
+static void	rq_dequeue(struct rqueue *rq, char *dst, int *size);
+static void	rq_enqueue(struct rqueue *rq, char *src, int size);
 static d_open_t		hidctl_open;
 static d_close_t	hidctl_close;
 static d_read_t		hidctl_read;
@@ -164,7 +165,7 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 	struct uvhid_softc *sc;
 
 	sc = malloc(sizeof(*sc), M_UVHID, M_WAITOK|M_ZERO);
-	mtx_init(&sc->us_mtx, "uvhid", NULL, MTX_DEF);
+	mtx_init(&sc->us_mtx, "uvhid_lock", NULL, MTX_DEF | MTX_RECURSE);
 	hidctl_dev->si_drv1 = sc;
 	hid_dev->si_drv1 = sc;
 }
@@ -184,6 +185,8 @@ hidctl_open(struct cdev *dev, int flag, int mode, struct thread *td)
 	}
 
 	sc->us_flags |= HIDCTL_OPEN;
+	rq_reset(&sc->us_rq);
+	rq_reset(&sc->us_wq);
 
 	UVHID_UNLOCK(sc);
 
@@ -200,10 +203,8 @@ hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 	UVHID_LOCK(sc);
 
 	sc->us_flags &= ~HIDCTL_OPEN;
-	sc->us_rq.cc = 0;
-	sc->us_rq.head = sc->us_rq.tail = sc->us_rq.q;
-	sc->us_wq.cc = 0;
-	sc->us_wq.head = sc->us_wq.tail = sc->us_wq.q;
+	rq_reset(&sc->us_rq);
+	rq_reset(&sc->us_wq);
 
 	UVHID_UNLOCK(sc);
 
@@ -230,14 +231,14 @@ hidctl_read(struct cdev *dev, struct uio *uio, int flag)
 hidctl_read_again:
 	len = 0;
 	if (sc->us_wq.cc > 0) {
-		report_dequeue(&sc->us_wq, buf, &len);
+		rq_dequeue(&sc->us_wq, buf, &len);
 		err = uiomove(buf, len, uio);
 	} else {
 		if (flag & O_NONBLOCK) {
 			err = EWOULDBLOCK;
 			goto hidctl_read_done;
 		}
-		err = UVHID_SLEEP(sc, us_wq, "hidctlr", 0);
+		err = UVHID_SLEEP(sc, us_wq.cc, "hidctlr", 0);
 		if (err != 0)
 			goto hidctl_read_done;
 		goto hidctl_read_again;
@@ -257,7 +258,7 @@ hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 {
 	struct uvhid_softc *sc;
 	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int err;
+	int err, size;
 
 	sc = dev->si_drv1;
 
@@ -269,10 +270,12 @@ hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 	}
 
 	sc->us_flags |= HIDCTL_WRITE;
-	err = uiomove(buf, uio->uio_resid, uio);
+	size = uio->uio_resid;
+	err = uiomove(buf, size, uio);
 	if (err != 0)
 		goto hidctl_write_done;
-	report_enqueue(&sc->us_rq, buf, uio->uio_resid);
+	rq_enqueue(&sc->us_rq, buf, size);
+	wakeup(&sc->us_rq.cc);
 
 hidctl_write_done:
 
@@ -355,14 +358,14 @@ hid_read(struct cdev *dev, struct uio *uio, int flag)
 hid_read_again:
 	len = 0;
 	if (sc->us_rq.cc > 0) {
-		report_dequeue(&sc->us_rq, buf, &len);
+		rq_dequeue(&sc->us_rq, buf, &len);
 		err = uiomove(buf, len, uio);
 	} else {
 		if (flag & O_NONBLOCK) {
 			err = EWOULDBLOCK;
 			goto hid_read_done;
 		}
-		err = UVHID_SLEEP(sc, us_rq, "hidr", 0);
+		err = UVHID_SLEEP(sc, us_rq.cc, "hidr", 0);
 		if (err != 0)
 			goto hid_read_done;
 		goto hid_read_again;
@@ -382,7 +385,7 @@ hid_write(struct cdev *dev, struct uio *uio, int flag)
 {
 	struct uvhid_softc *sc;
 	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int err;
+	int err, size;
 
 	sc = dev->si_drv1;
 
@@ -394,10 +397,12 @@ hid_write(struct cdev *dev, struct uio *uio, int flag)
 	}
 
 	sc->us_flags |= HID_WRITE;
+	size = uio->uio_resid;
 	err = uiomove(buf, uio->uio_resid, uio);
 	if (err != 0)
 		goto hid_write_done;
-	report_enqueue(&sc->us_wq, buf, uio->uio_resid);
+	rq_enqueue(&sc->us_wq, buf, size);
+	wakeup(&sc->us_wq.cc);
 
 hid_write_done:
 
@@ -424,7 +429,15 @@ hid_poll(struct cdev *dev, int events, struct thread *td)
 }
 
 static void
-report_dequeue(struct rqueue *rq, char *dst, int *size)
+rq_reset(struct rqueue *rq)
+{
+
+	rq->cc = 0;
+	rq->head = rq->tail = rq->q;
+}
+
+static void
+rq_dequeue(struct rqueue *rq, char *dst, int *size)
 {
 	int len, part1, part2;
 
@@ -473,7 +486,7 @@ report_dequeue(struct rqueue *rq, char *dst, int *size)
 }
 
 static void
-report_enqueue(struct rqueue *rq, char *src, int size)
+rq_enqueue(struct rqueue *rq, char *src, int size)
 {
 	int len, part1, part2;
 
@@ -483,7 +496,7 @@ report_enqueue(struct rqueue *rq, char *src, int size)
 	/* Discard the oldest reports if not enough room left. */
 	len = size + 1;
 	while (len > UVHID_QUEUE_SIZE - rq->cc)
-		report_dequeue(rq, NULL, NULL);
+		rq_dequeue(rq, NULL, NULL);
 
 	part1 = UVHID_QUEUE_SIZE - (rq->tail - rq->q);
 	if (part1 > len)
