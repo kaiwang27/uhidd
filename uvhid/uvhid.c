@@ -47,6 +47,7 @@ MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
 #define UVHID_LOCK(s)		mtx_lock(&(s)->us_mtx)
 #define UVHID_UNLOCK(s)		mtx_unlock(&(s)->us_mtx)
+#define UVHID_LOCK_ASSERT(s, w)	mtx_assert(&(s)->us_mtx, w)
 #define	UVHID_SLEEP(s, f, d, t) \
 	msleep(&(s)->f, &(s)->us_mtx, PCATCH | (PZERO + 1), d, t)
 
@@ -62,22 +63,25 @@ struct uvhid_softc {
 	struct rqueue	us_wq;
 	struct mtx	us_mtx;
 
-#define	HIDCTL_OPEN	(1 << 0)	/* hidctl device is open */
-#define	HID_OPEN	(1 << 1)	/* hid device is open */
-#define	HIDCTL_READ	(1 << 2)	/* hidctl read pending */
-#define	HID_READ	(1 << 3)	/* hid read pending */
-#define	HIDCTL_WRITE	(1 << 2)	/* hidctl write pending */
-#define	HID_WRITE	(1 << 3)	/* hid write pending */
+#define	OPEN	(1 << 0)	/* device is open */
+#define	READ	(1 << 1)	/* read pending */
+#define	WRITE	(1 << 2)	/* write pending */
 
-	int		us_flags;
+	int		us_hcflags;
+	int		us_hflags;
 };
 
 static void	hidctl_clone(void *arg, struct ucred *cred, char *name,
     int namelen, struct cdev **dev);
 static void	hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
+static int	gen_read(struct uvhid_softc *sc, int *scflag,
+    struct rqueue *rq, struct uio *uio, int flag);
+static int	gen_write(struct uvhid_softc *sc, int *scflag,
+    struct rqueue *rq, struct uio *uio, int flag);
 static void	rq_reset(struct rqueue *rq);
 static void	rq_dequeue(struct rqueue *rq, char *dst, int *size);
 static void	rq_enqueue(struct rqueue *rq, char *src, int size);
+
 static d_open_t		hidctl_open;
 static d_close_t	hidctl_close;
 static d_read_t		hidctl_read;
@@ -173,21 +177,16 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 static int
 hidctl_open(struct cdev *dev, int flag, int mode, struct thread *td)
 {
-	struct uvhid_softc *sc;
-
-	sc = dev->si_drv1;
+	struct uvhid_softc *sc = dev->si_drv1;
 
 	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HIDCTL_OPEN) {
+	if (sc->us_hcflags & OPEN) {
 		UVHID_UNLOCK(sc);
 		return (EBUSY);
 	}
-
-	sc->us_flags |= HIDCTL_OPEN;
+	sc->us_hcflags |= OPEN;
 	rq_reset(&sc->us_rq);
 	rq_reset(&sc->us_wq);
-
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -196,16 +195,12 @@ hidctl_open(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 {
-	struct uvhid_softc *sc;
-
-	sc = dev->si_drv1;
+	struct uvhid_softc *sc = dev->si_drv1;
 
 	UVHID_LOCK(sc);
-
-	sc->us_flags &= ~HIDCTL_OPEN;
+	sc->us_hcflags &= ~OPEN;
 	rq_reset(&sc->us_rq);
 	rq_reset(&sc->us_wq);
-
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -214,80 +209,17 @@ hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hidctl_read(struct cdev *dev, struct uio *uio, int flag)
 {
-	struct uvhid_softc *sc;
-	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int len, err;
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	sc = dev->si_drv1;
-
-	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HIDCTL_READ) {
-		UVHID_UNLOCK(sc);
-		return (EALREADY);
-	}
-	sc->us_flags |= HIDCTL_READ;
-
-hidctl_read_again:
-	len = 0;
-	if (sc->us_wq.cc > 0) {
-		rq_dequeue(&sc->us_wq, buf, &len);
-		UVHID_UNLOCK(sc);
-		err = uiomove(buf, len, uio);
-		UVHID_LOCK(sc);
-	} else {
-		if (flag & O_NONBLOCK) {
-			err = EWOULDBLOCK;
-			goto hidctl_read_done;
-		}
-		err = UVHID_SLEEP(sc, us_wq.cc, "hidctlr", 0);
-		if (err != 0)
-			goto hidctl_read_done;
-		goto hidctl_read_again;
-	}
-
-hidctl_read_done:
-
-	sc->us_flags &= ~HIDCTL_READ;
-
-	UVHID_UNLOCK(sc);
-
-	return (err);
+	return (gen_read(sc, &sc->us_hcflags, &sc->us_wq, uio, flag));
 }
 
 static int
 hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 {
-	struct uvhid_softc *sc;
-	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int err, size;
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	sc = dev->si_drv1;
-
-	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HIDCTL_WRITE) {
-		UVHID_UNLOCK(sc);
-		return (EALREADY);
-	}
-
-	sc->us_flags |= HIDCTL_WRITE;
-	size = uio->uio_resid;
-	UVHID_UNLOCK(sc);
-	err = uiomove(buf, size, uio);
-	UVHID_LOCK(sc);
-	if (err != 0)
-		goto hidctl_write_done;
-	rq_enqueue(&sc->us_rq, buf, size);
-	wakeup(&sc->us_rq.cc);
-
-hidctl_write_done:
-
-	sc->us_flags &= ~HIDCTL_WRITE;
-
-	UVHID_UNLOCK(sc);
-
-	return (err);
+	return (gen_write(sc, &sc->us_hcflags, &sc->us_rq, uio, flag));
 }
 
 static int
@@ -308,19 +240,14 @@ hidctl_poll(struct cdev *dev, int events, struct thread *td)
 static int
 hid_open(struct cdev *dev, int flag, int mode, struct thread *td)
 {
-	struct uvhid_softc *sc;
-
-	sc = dev->si_drv1;
+	struct uvhid_softc *sc = dev->si_drv1;
 
 	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HID_OPEN) {
+	if (sc->us_hflags & OPEN) {
 		UVHID_UNLOCK(sc);
 		return (EBUSY);
 	}
-
-	sc->us_flags |= HID_OPEN;
-
+	sc->us_hflags |= OPEN;
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -329,14 +256,10 @@ hid_open(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 {
-	struct uvhid_softc *sc;
-
-	sc = dev->si_drv1;
+	struct uvhid_softc *sc = dev->si_drv1;
 
 	UVHID_LOCK(sc);
-
-	sc->us_flags &= ~HID_OPEN;
-
+	sc->us_hflags &= ~OPEN;
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -345,80 +268,17 @@ hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 static int
 hid_read(struct cdev *dev, struct uio *uio, int flag)
 {
-	struct uvhid_softc *sc;
-	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int len, err;
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	sc = dev->si_drv1;
-
-	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HID_READ) {
-		UVHID_UNLOCK(sc);
-		return (EALREADY);
-	}
-	sc->us_flags |= HID_READ;
-
-hid_read_again:
-	len = 0;
-	if (sc->us_rq.cc > 0) {
-		rq_dequeue(&sc->us_rq, buf, &len);
-		UVHID_UNLOCK(sc);
-		err = uiomove(buf, len, uio);
-		UVHID_LOCK(sc);
-	} else {
-		if (flag & O_NONBLOCK) {
-			err = EWOULDBLOCK;
-			goto hid_read_done;
-		}
-		err = UVHID_SLEEP(sc, us_rq.cc, "hidr", 0);
-		if (err != 0)
-			goto hid_read_done;
-		goto hid_read_again;
-	}
-
-hid_read_done:
-
-	sc->us_flags &= ~HID_READ;
-
-	UVHID_UNLOCK(sc);
-
-	return (err);
+	return (gen_read(sc, &sc->us_hflags, &sc->us_rq, uio, flag));
 }
 
 static int
 hid_write(struct cdev *dev, struct uio *uio, int flag)
 {
-	struct uvhid_softc *sc;
-	unsigned char buf[UVHID_MAX_REPORT_SIZE];
-	int err, size;
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	sc = dev->si_drv1;
-
-	UVHID_LOCK(sc);
-
-	if (sc->us_flags & HID_WRITE) {
-		UVHID_UNLOCK(sc);
-		return (EALREADY);
-	}
-
-	sc->us_flags |= HID_WRITE;
-	size = uio->uio_resid;
-	UVHID_UNLOCK(sc);
-	err = uiomove(buf, uio->uio_resid, uio);
-	UVHID_LOCK(sc);
-	if (err != 0)
-		goto hid_write_done;
-	rq_enqueue(&sc->us_wq, buf, size);
-	wakeup(&sc->us_wq.cc);
-
-hid_write_done:
-
-	sc->us_flags &= ~HID_WRITE;
-
-	UVHID_UNLOCK(sc);
-
-	return (err);
+	return (gen_write(sc, &sc->us_hflags, &sc->us_wq, uio, flag));
 }
 
 static int
@@ -434,6 +294,79 @@ hid_poll(struct cdev *dev, int events, struct thread *td)
 {
 
 	return (0);
+}
+
+static int
+gen_read(struct uvhid_softc *sc, int *scflag, struct rqueue *rq,
+    struct uio *uio, int flag)
+{
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int amnt, err, len;
+
+	UVHID_LOCK(sc);
+	if (*scflag & READ) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+	*scflag |= READ;
+
+	len = 0;
+
+read_again:
+	if (rq->cc > 0) {
+		rq_dequeue(rq, buf, &len);
+		UVHID_UNLOCK(sc);
+		amnt = min(uio->uio_resid, len);
+		err = uiomove(buf, amnt, uio);
+		UVHID_LOCK(sc);
+	} else {
+		if (flag & O_NONBLOCK) {
+			err = EWOULDBLOCK;
+			goto read_done;
+		}
+		err = msleep(&rq->cc, &sc->us_mtx, PCATCH | (PZERO + 1),
+		    "uvhidr", 0);
+		if (err != 0)
+			goto read_done;
+		goto read_again;
+	}
+
+read_done:
+	*scflag &= ~READ;
+	UVHID_UNLOCK(sc);
+
+	return (err);
+}
+
+static int
+gen_write(struct uvhid_softc *sc, int *scflag, struct rqueue *rq,
+    struct uio *uio, int flag)
+{
+	unsigned char buf[UVHID_MAX_REPORT_SIZE];
+	int err, len;
+
+	UVHID_LOCK(sc);
+
+	if (*scflag & WRITE) {
+		UVHID_UNLOCK(sc);
+		return (EALREADY);
+	}
+	*scflag |= WRITE;
+
+	UVHID_UNLOCK(sc);
+	len = uio->uio_resid;
+	err = uiomove(buf, len, uio);
+	UVHID_LOCK(sc);
+	if (err != 0)
+		goto write_done;
+	rq_enqueue(rq, buf, len);
+	wakeup(&rq->cc);
+
+write_done:
+	*scflag &= ~WRITE;
+	UVHID_UNLOCK(sc);
+
+	return (err);
 }
 
 static void
