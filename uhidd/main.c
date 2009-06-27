@@ -43,6 +43,8 @@ int detach = 0;
 static void	usage(void);
 static void	find_dev(const char *dev);
 static void	attach_dev(const char *dev, struct libusb20_device *pdev);
+static void	attach_iface(const char *dev, struct libusb20_device *pdev,
+    struct libusb20_interface *iface, int i);
 
 int
 main(int argc, char **argv)
@@ -121,9 +123,65 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	/* Iterate each interface. */
 	for (i = 0; i < config->num_interface; i++) {
 		iface = &config->interface[i];
-		if (iface->desc.bInterfaceClass == 3) {
+		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
 			printf("%s: has HID interface %d\n", dev, i);
+			attach_iface(dev, pdev, iface, i);
 		}
+	}
+
+	free(config);
+}
+
+static void
+attach_iface(const char *dev, struct libusb20_device *pdev,
+    struct libusb20_interface *iface, int i)
+{
+	struct LIBUSB20_CONTROL_SETUP_DECODED req;
+	unsigned char rdesc[16384];
+	int desc, ds, e, j, pos, size;
+	uint16_t actlen;
+
+	/* XXX ioctl currently unimplemented */
+	if (libusb20_dev_kernel_driver_active(pdev, i)) {
+		printf("%s: iface(%d) kernel driver is active\n", dev, i);
+		/* TODO probably detach the kernel driver here. */
+	} else
+		printf("%s: iface(%d) kernel driver is not active\n", dev, i);
+
+	/* Get report descriptor. */
+	pos = 0;
+	size = iface->extra.len;
+	while (size > 2) {
+		if (libusb20_me_get_1(&iface->extra, pos + 1) == LIBUSB20_DT_HID)
+			break;
+		size -= libusb20_me_get_1(&iface->extra, pos);
+		pos += libusb20_me_get_1(&iface->extra, pos);
+	}
+	if (size <= 2)
+		return;
+	desc = pos + 6;
+	for (j = 0; j < libusb20_me_get_1(&iface->extra, pos + 5);
+	     j++, desc += j * 3) {
+		if (libusb20_me_get_1(&iface->extra, desc) ==
+		    LIBUSB20_DT_REPORT)
+			break;
+	}
+	if (j >= libusb20_me_get_1(&iface->extra, pos + 5))
+		return;
+	ds = libusb20_me_get_2(&iface->extra, desc + 1);
+	printf("%s: iface(%d) report size = %d\n", dev, i, ds);
+	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
+	req.bmRequestType = LIBUSB20_ENDPOINT_IN |
+		LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
+	req.bRequest = LIBUSB20_REQUEST_GET_DESCRIPTOR;
+	req.wValue = LIBUSB20_DT_REPORT << 8;
+	req.wIndex = i;
+	req.wLength = ds;
+	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
+	if (e) {
+		printf("%s: iface(%d) libusb20_dev_request_sync failed\n",
+		    dev, i);
+		return;
 	}
 }
 
