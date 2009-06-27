@@ -28,6 +28,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/queue.h>
 #include <err.h>
 #include <fcntl.h>
 #include <libusb20.h>
@@ -37,15 +38,49 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 
+#define	_MAX_RDESC_SIZE	16384
+#define	_MAX_REPORT_IDS	64
+
+enum uhidd_ctype {
+	UHIDD_MOUSE,
+	UHIDD_KEYBOARD,
+	UHIDD_HID
+};
+
+struct hid_child;
+
+struct hid_parent {
+	const char			*dev;
+	struct libusb20_device		*pdev;
+	struct libusb20_interface	*iface;
+	int				 ndx;
+	char				 rdesc[_MAX_RDESC_SIZE];
+	int				 rsz;
+	pthread_t			 thread;
+	STAILQ_HEAD(, hid_child)	 children;
+	STAILQ_ENTRY(hid_parent)	 next;
+};
+
+struct hid_child {
+	struct hid_parent	*parent;
+	enum uhidd_ctype	 type;
+	char			 rdesc[_MAX_RDESC_SIZE];
+	int			 rsz;
+	int			 rid[_MAX_REPORT_IDS];
+	int			 nr;
+	STAILQ_ENTRY(hid_child)	 next;
+};
+
 int debug = 0;
 int detach = 0;
+STAILQ_HEAD(, hid_parent) hplist;
 
 static void	usage(void);
 static void	find_dev(const char *dev);
 static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
-
+static void	attach_hid_parent(struct hid_parent *hp);
 int
 main(int argc, char **argv)
 {
@@ -69,6 +104,8 @@ main(int argc, char **argv)
 
 	if (*argv == NULL)
 		usage();
+
+	STAILQ_INIT(&hplist);
 
 	find_dev(*argv);
 
@@ -134,19 +171,20 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 
 static void
 attach_iface(const char *dev, struct libusb20_device *pdev,
-    struct libusb20_interface *iface, int i)
+    struct libusb20_interface *iface, int ndx)
 {
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
+	struct hid_parent *hp;
 	unsigned char rdesc[16384];
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
 
 	/* XXX ioctl currently unimplemented */
-	if (libusb20_dev_kernel_driver_active(pdev, i)) {
-		printf("%s: iface(%d) kernel driver is active\n", dev, i);
+	if (libusb20_dev_kernel_driver_active(pdev, ndx)) {
+		printf("%s: iface(%d) kernel driver is active\n", dev, ndx);
 		/* TODO probably detach the kernel driver here. */
 	} else
-		printf("%s: iface(%d) kernel driver is not active\n", dev, i);
+		printf("%s: iface(%d) kernel driver is not active\n", dev, ndx);
 
 	/* Get report descriptor. */
 	pos = 0;
@@ -169,20 +207,40 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	if (j >= libusb20_me_get_1(&iface->extra, pos + 5))
 		return;
 	ds = libusb20_me_get_2(&iface->extra, desc + 1);
-	printf("%s: iface(%d) report size = %d\n", dev, i, ds);
+	printf("%s: iface(%d) report size = %d\n", dev, ndx, ds);
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_IN |
 		LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
 	req.bRequest = LIBUSB20_REQUEST_GET_DESCRIPTOR;
 	req.wValue = LIBUSB20_DT_REPORT << 8;
-	req.wIndex = i;
+	req.wIndex = ndx;
 	req.wLength = ds;
 	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
 	if (e) {
 		printf("%s: iface(%d) libusb20_dev_request_sync failed\n",
-		    dev, i);
+		    dev, ndx);
 		return;
 	}
+
+	hp = calloc(1, sizeof(*hp));
+	if (hp == NULL)
+		err(1, "calloc");
+	hp->dev = dev;
+	hp->pdev = pdev;
+	hp->iface = iface;
+	hp->ndx = ndx;
+	memcpy(hp->rdesc, rdesc, actlen);
+	hp->rsz = actlen;
+	STAILQ_INSERT_TAIL(&hplist, hp, next);
+
+	attach_hid_parent(hp);
+}
+
+static void
+attach_hid_parent(struct hid_parent *hp)
+{
+
+	(void) hp;
 }
 
 static void
