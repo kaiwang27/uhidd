@@ -31,6 +31,7 @@ __FBSDID("$FreeBSD$");
 #include <err.h>
 #include <fcntl.h>
 #include <libusb20.h>
+#include <libusb20_desc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,7 @@ int detach = 0;
 
 static void	usage(void);
 static void	find_dev(const char *dev);
+static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 
 int
 main(int argc, char **argv)
@@ -88,10 +90,40 @@ find_dev(const char *dev)
 	pdev = NULL;
 	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
 		if (bus == libusb20_dev_get_bus_number(pdev) &&
-		    addr == libusb20_dev_get_address(pdev)) {
-			printf("find device\n");
+		    addr == libusb20_dev_get_address(pdev))
+			attach_dev(dev, pdev);
+	}
+
+	libusb20_be_free(backend);
+}
+
+static void
+attach_dev(const char *dev, struct libusb20_device *pdev)
+{
+	struct libusb20_config *config;
+	struct libusb20_interface *iface;
+	int cndx, e, i;
+
+	e = libusb20_dev_open(pdev, 32);
+	if (e != 0) {
+		printf("%s: libusb20_dev_open failed\n", dev);
+		return;
+	}
+		
+	/* Get current configuration. */
+	cndx = libusb20_dev_get_config_index(pdev);
+	config = libusb20_dev_alloc_config(pdev, cndx);
+	if (config == NULL) {
+		printf("%s: can not alloc config", dev);
+		return;
+	}
+
+	/* Iterate each interface. */
+	for (i = 0; i < config->num_interface; i++) {
+		iface = &config->interface[i];
+		if (iface->desc.bInterfaceClass == 3) {
+			printf("%s: has HID interface %d\n", dev, i);
 		}
-		printf("not yet\n");
 	}
 }
 
