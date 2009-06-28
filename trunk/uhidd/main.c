@@ -38,14 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 
-#define	_MAX_RDESC_SIZE	16384
-#define	_MAX_REPORT_IDS	64
-
-enum uhidd_ctype {
-	UHIDD_MOUSE,
-	UHIDD_KEYBOARD,
-	UHIDD_HID
-};
+#include "extern.h"
 
 struct hid_child;
 
@@ -54,17 +47,17 @@ struct hid_parent {
 	struct libusb20_device		*pdev;
 	struct libusb20_interface	*iface;
 	int				 ndx;
-	char				 rdesc[_MAX_RDESC_SIZE];
+	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
 	pthread_t			 thread;
-	STAILQ_HEAD(, hid_child)	 children;
+	STAILQ_HEAD(, hid_child)	 hclist;
 	STAILQ_ENTRY(hid_parent)	 next;
 };
 
 struct hid_child {
 	struct hid_parent	*parent;
 	enum uhidd_ctype	 type;
-	char			 rdesc[_MAX_RDESC_SIZE];
+	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
@@ -231,6 +224,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	hp->ndx = ndx;
 	memcpy(hp->rdesc, rdesc, actlen);
 	hp->rsz = actlen;
+	STAILQ_INIT(&hp->hclist);
 	STAILQ_INSERT_TAIL(&hplist, hp, next);
 
 	attach_hid_parent(hp);
@@ -239,7 +233,10 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 static void
 attach_hid_parent(struct hid_parent *hp)
 {
+	struct hid_child *hc;
 
+	/* Check how many children we have. */
+	(void) hc;
 	(void) hp;
 }
 
