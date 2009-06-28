@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dev/usb/usbhid.h>
 
 #include "extern.h"
 
@@ -74,6 +75,7 @@ static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
+static void	attach_hid_child(struct hid_child *hc);
 int
 main(int argc, char **argv)
 {
@@ -172,12 +174,14 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
 
+#if 0
 	/* XXX ioctl currently unimplemented */
 	if (libusb20_dev_kernel_driver_active(pdev, ndx)) {
 		printf("%s: iface(%d) kernel driver is active\n", dev, ndx);
 		/* TODO probably detach the kernel driver here. */
 	} else
 		printf("%s: iface(%d) kernel driver is not active\n", dev, ndx);
+#endif
 
 	/* Get report descriptor. */
 	pos = 0;
@@ -235,11 +239,12 @@ attach_hid_parent(struct hid_parent *hp)
 {
 	struct hid_child *hc;
 	hid_parser_t p;
+	hid_data_t d;
+	hid_item_t h, ch;
 	int rid[_MAX_REPORT_IDS];
-	int i, nr;
+	int i, nr, start, end;
 
 	/* Check how many children we have. */
-	(void) hc;
 	p = hid_parser_alloc(hp->rdesc, hp->rsz);
 	nr = hid_get_report_id_num(p);
 	hid_get_report_ids(p, rid, nr);
@@ -251,6 +256,99 @@ attach_hid_parent(struct hid_parent *hp)
 			putchar(',');
 	}
 	printf(")\n");
+	if (nr == 0)
+		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", 0,
+		    hid_report_size(p, hid_input, 0),
+		    hid_report_size(p, hid_output, 0),
+		    hid_report_size(p, hid_feature, 0));
+	for (i = 0; i < nr; i++)
+		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", rid[i],
+		    hid_report_size(p, hid_input, rid[i]),
+		    hid_report_size(p, hid_output, rid[i]),
+		    hid_report_size(p, hid_feature, rid[i]));
+	memset(&h, 0, sizeof(h));
+	memset(&ch, 0, sizeof(ch));
+	start = end = 0;
+	for (d = hid_start_parse(p, 1<<hid_collection | 1<<hid_endcollection);
+	     hid_get_item(d, &h, -1); ) {
+		if (h.kind == hid_collection && h.collection == 0x01) {
+			start = d->p - d->start;
+			ch = h;
+			printf("%s: iface(%d) application start offset %d\n",
+			    hp->dev, hp->ndx, start);
+		}
+		if (h.kind == hid_endcollection &&
+		    ch.collevel - 1 == h.collevel) {
+			end = d->p - d->start - 1;
+			hc = calloc(1, sizeof(*hc));
+			if (hc == NULL)
+				err(1, "calloc");
+			hc->parent = hp;
+			hc->rsz = end - start;
+			if (hc->rsz <= 0 || hc->rsz > _MAX_RDESC_SIZE)
+				errx(1, "%s: iface(%d) invalid hid child"
+				    " report desc range [%d-%d]", hp->dev,
+				    hp->ndx, start, end);
+			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
+			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
+			printf("%s: iface(%d) application end offset %d\n",
+			    hp->dev, hp->ndx, end);
+			printf("%s: iface(%d) [%d-%d] ", hp->dev, hp->ndx,
+			    start, end);
+			if (ch.usage ==
+			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_MOUSE)) {
+				printf("mouse found\n");
+				hc->type = UHIDD_MOUSE;
+			} else if (ch.usage ==
+			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
+				printf("keyboard found\n");
+				hc->type = UHIDD_KEYBOARD;
+			} else {
+				printf("general hid device found\n");
+				hc->type = UHIDD_HID;
+			}
+			attach_hid_child(hc);
+		}
+	}
+	hid_end_parse(d);
+	hid_parser_free(p);
+}
+
+static void
+attach_hid_child(struct hid_child *hc)
+{
+	hid_parser_t p;
+	int i;
+
+	p = hid_parser_alloc(hc->rdesc, hc->rsz);
+	hc->nr = p->nr;
+	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
+	printf("\tnr=%d ", hc->nr);
+	printf("rid=(");
+	for (i = 0; i < hc->nr; i++) {
+		printf("%d", hc->rid[i]);
+		if (i < hc->nr - 1)
+			putchar(',');
+	}
+	/*
+	 * TODO well here we need to "repair" some child report desc before
+	 * we can give it to the parser, since there are possible global
+	 * items(i.e. environment) missing.
+	 */
+	printf(")\n");
+	if (hc->nr == 0)
+		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", 0,
+		    hid_report_size(p, hid_input, 0),
+		    hid_report_size(p, hid_output, 0),
+		    hid_report_size(p, hid_feature, 0));
+	for (i = 0; i < hc->nr; i++)
+		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
+		    hc->rid[i],
+		    hid_report_size(p, hid_input, hc->rid[i]),
+		    hid_report_size(p, hid_output, hc->rid[i]),
+		    hid_report_size(p, hid_feature, hc->rid[i]));
+
+	/* TODO open hidctl device here. */
 }
 
 static void

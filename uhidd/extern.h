@@ -29,6 +29,7 @@
 
 #define	_MAX_RDESC_SIZE	16384
 #define	_MAX_REPORT_IDS	256
+#define MAXUSAGE 100
 
 enum uhidd_ctype {
 	UHIDD_MOUSE,
@@ -37,6 +38,12 @@ enum uhidd_ctype {
 };
 
 struct hid_parser;
+struct hid_parser {
+	unsigned char		 rdesc[_MAX_RDESC_SIZE];
+	int			 rsz;
+	int			 rid[_MAX_REPORT_IDS];
+	int			 nr;
+};
 
 typedef struct hid_parser *hid_parser_t;
 typedef struct hid_data *hid_data_t;
@@ -83,6 +90,26 @@ typedef struct hid_item {
 	/* */
 	struct hid_item *next;
 } hid_item_t;
+
+struct hid_data {
+	u_char *start;
+	u_char *end;
+	u_char *p;
+	hid_item_t cur;
+	unsigned int usages[MAXUSAGE];
+	int nusage;
+	int minset;
+	int logminsize;
+	int multi;
+	int multimax;
+	int kindset;
+	/*
+	 * Absolute data position (bits) for input/output/feature of each
+	 * report id. Assumes that hid_input, hid_output and hid_feature have
+	 * values 0, 1 and 2.
+	 */
+	unsigned int kindpos[_MAX_REPORT_IDS][3];
+};
 
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)

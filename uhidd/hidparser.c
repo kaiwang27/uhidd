@@ -30,51 +30,12 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <err.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dev/usb/usbhid.h>
 
 #include "extern.h"
-
-#define MAXUSAGE 100
-
-/* Bits in the input/output/feature items */
-#define	HIO_CONST	0x001
-#define	HIO_VARIABLE	0x002
-
-struct hid_parser {
-	unsigned char		 rdesc[_MAX_RDESC_SIZE];
-	int			 rsz;
-	int			 rid[_MAX_REPORT_IDS];
-	int			 nr;
-};
-
-struct hid_data {
-	u_char *start;
-	u_char *end;
-	u_char *p;
-	hid_item_t cur;
-	unsigned int usages[MAXUSAGE];
-	int nusage;
-	int minset;
-	int logminsize;
-	int multi;
-	int multimax;
-	int kindset;
-	int reportid;
-
-	/*
-	 * The start of collection item has no report ID set, so save
-	 * it until we know the ID.
-	 */
-	hid_item_t savedcoll;
-	u_char hassavedcoll;
-	/*
-	 * Absolute data position (bits) for input/output/feature of each
-	 * report id. Assumes that hid_input, hid_output and hid_feature have
-	 * values 0, 1 and 2.
-	 */
-	unsigned int kindpos[_MAX_REPORT_IDS][3];
-};
 
 static void	hid_clear_local(hid_item_t *c);
 static void	hid_parser_init(hid_parser_t p);
@@ -211,7 +172,6 @@ hid_start_parse(hid_parser_t p, int kindset)
 	s->start = s->p = p->rdesc;
 	s->end = p->rdesc + p->rsz;
 	s->kindset = kindset;
-	s->hassavedcoll = 0;
 	return (s);
 }
 
@@ -242,16 +202,6 @@ hid_get_item(hid_data_t s, hid_item_t *h, int id)
 	return (r);
 }
 
-#define REPORT_SAVED_COLL \
-	do { \
-		if (s->hassavedcoll) { \
-			*h = s->savedcoll; \
-			h->report_ID = c->report_ID; \
-			s->hassavedcoll = 0; \
-			return (1); \
-		} \
-	} while(/*LINTED*/ 0)
-
 static int
 hid_get_item_raw(hid_data_t s, hid_item_t *h)
 {
@@ -261,7 +211,6 @@ hid_get_item_raw(hid_data_t s, hid_item_t *h)
 	int dval;
 	unsigned char *p;
 	hid_item_t *hi;
-	hid_item_t nc;
 	int i;
 	hid_kind_t retkind;
 
@@ -269,7 +218,6 @@ hid_get_item_raw(hid_data_t s, hid_item_t *h)
 
 top:
 	if (s->multimax) {
-		REPORT_SAVED_COLL;
 		if (c->logical_minimum >= c->logical_maximum) {
 			if (s->logminsize == 1)
 				c->logical_minimum =(int8_t)c->logical_minimum;
@@ -304,7 +252,6 @@ top:
 		if (bSize == 0xfe) {
 			/* long item */
 			bSize = *p++;
-			bSize |= *p++ << 8;
 			bTag = *p++;
 			data = p;
 			p += bSize;
@@ -391,25 +338,14 @@ top:
 				c->kind = hid_collection;
 				c->collection = dval;
 				c->collevel++;
-				nc = *c;
+				*h = *c;
 				hid_clear_local(c);
-				/*c->report_ID = NO_REPORT_ID;*/
 				s->nusage = 0;
-				if (s->hassavedcoll) {
-					*h = s->savedcoll;
-					h->report_ID = nc.report_ID;
-					s->savedcoll = nc;
-					return (1);
-				} else {
-					s->hassavedcoll = 1;
-					s->savedcoll = nc;
-				}
-				break;
+				return (1);
 			case 11:	/* Feature */
 				retkind = hid_feature;
 				goto ret;
 			case 12:	/* End collection */
-				REPORT_SAVED_COLL;
 				c->kind = hid_endcollection;
 				c->collevel--;
 				*h = *c;
@@ -526,8 +462,12 @@ hid_report_size(hid_parser_t p, enum hid_kind k, int id)
 	memset(&h, 0, sizeof h);
 	size = 0;
 	for (d = hid_start_parse(p, 1<<k); hid_get_item(d, &h, id); ) {
+		if (id == 3)
+			printf("id == 3, item->kind=%d\n", h.kind);
 		if (h.report_ID == id && h.kind == k) {
 			size = d->kindpos[id][k];
+			if (id == 3)
+				printf("id == 3, size=%d\n", size);
 		}
 	}
 	hid_end_parse(d);
