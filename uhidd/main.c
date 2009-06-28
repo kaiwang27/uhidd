@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <fcntl.h>
 #include <libusb20.h>
 #include <libusb20_desc.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,15 +71,20 @@ int detach = 0;
 STAILQ_HEAD(, hid_parent) hplist;
 
 static void	usage(void);
-static void	find_dev(const char *dev);
+static void	find_and_attach(struct libusb20_backend *backend,
+    const char *dev);
 static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
 static void	attach_hid_child(struct hid_child *hc);
+static void	*start_hid_parent(void *arg);
+
 int
 main(int argc, char **argv)
 {
+	struct hid_parent *hp;
+	struct libusb20_backend *backend;
 	int opt;
 
 	while ((opt = getopt(argc, argv, "dk")) != -1) {
@@ -100,26 +106,34 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
-	STAILQ_INIT(&hplist);
+	backend = libusb20_be_alloc_default();
+	if (backend == NULL)
+		errx(1, "can not alloc backend");
 
-	find_dev(*argv);
+	STAILQ_INIT(&hplist);
+	find_and_attach(backend, *argv);
+	if (STAILQ_EMPTY(&hplist))
+		exit(0);
+	STAILQ_FOREACH(hp, &hplist, next) {
+		pthread_create(&hp->thread, NULL, start_hid_parent, (void *)hp);
+	}
+	STAILQ_FOREACH(hp, &hplist, next) {
+		pthread_join(hp->thread, NULL);
+	}
+
+	libusb20_be_free(backend);
 
 	exit(0);
 }
 
 static void
-find_dev(const char *dev)
+find_and_attach(struct libusb20_backend *backend, const char *dev)
 {
-	struct libusb20_backend *backend;
 	struct libusb20_device *pdev;
 	unsigned int bus, addr;
 
 	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2)
 		errx(1, "%s not found", dev);
-
-	backend = libusb20_be_alloc_default();
-	if (backend == NULL)
-		errx(1, "can not alloc backend");
 
 	pdev = NULL;
 	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
@@ -127,8 +141,6 @@ find_dev(const char *dev)
 		    addr == libusb20_dev_get_address(pdev))
 			attach_dev(dev, pdev);
 	}
-
-	libusb20_be_free(backend);
 }
 
 static void
@@ -349,6 +361,17 @@ attach_hid_child(struct hid_child *hc)
 		    hid_report_size(p, hid_feature, hc->rid[i]));
 
 	/* TODO open hidctl device here. */
+}
+
+static void *
+start_hid_parent(void *arg)
+{
+	struct hid_parent *hp;
+
+	hp = arg;
+	printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
+
+	return (NULL);
 }
 
 static void

@@ -5,8 +5,8 @@ NO_MAN=
 
 WARNS?=6
 
-DPADD=	${LIBUSB}
-LDADD=	-lusb
+DPADD=	${LIBUSB} ${LIBPTHREAD}
+LDADD=	-lusb -lpthread
 
 CFLAGS+=-I. -I${.CURDIR} -g
 
