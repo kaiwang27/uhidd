@@ -234,10 +234,23 @@ static void
 attach_hid_parent(struct hid_parent *hp)
 {
 	struct hid_child *hc;
+	hid_parser_t p;
+	int rid[_MAX_REPORT_IDS];
+	int i, nr;
 
 	/* Check how many children we have. */
 	(void) hc;
-	(void) hp;
+	p = hid_parser_alloc(hp->rdesc, hp->rsz);
+	nr = hid_get_report_id_num(p);
+	hid_get_report_ids(p, rid, nr);
+	printf("%s: iface(%d) nr=%d ", hp->dev, hp->ndx, nr);
+	printf("rid=(");
+	for (i = 0; i < nr; i++) {
+		printf("%d", rid[i]);
+		if (i < nr - 1)
+			putchar(',');
+	}
+	printf(")\n");
 }
 
 static void
