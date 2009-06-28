@@ -116,12 +116,21 @@ hid_get_report_id_num(hid_parser_t p)
 	return (p->nr);
 }
 
+void
+hid_get_report_ids(hid_parser_t p, int *rid, int size)
+{
+	int s;
+
+	s = min(size, p->nr);
+	memcpy(rid, p->rid, s*sizeof(int));
+}
+
 static void
 hid_parser_init(hid_parser_t p)
 {
 	unsigned char *b, *data;
 	unsigned int bTag, bType, bSize;
-	int dval;
+	int dval, found, i;
 
 	/* Collect all the report id(s) in the report desc. */
 	b = p->rdesc;
@@ -143,7 +152,7 @@ hid_parser_init(hid_parser_t p)
 			b += bSize;
 			/* only interested in REPORT ID. */
 			if (bType == 1 && bTag == 8) {
-				switch(bSize) {
+				switch (bSize) {
 				case 0:
 					dval = 0;
 					break;
@@ -163,7 +172,14 @@ hid_parser_init(hid_parser_t p)
 				default:
 					continue;
 				}
-				p->rid[p->nr++] = dval;
+				found = 0;
+				for (i = 0; i < p->nr; i++)
+					if (dval == p->rid[i]) {
+						found = 1;
+						break;
+					}
+				if (!found)
+					p->rid[p->nr++] = dval;
 			}
 		}
 	}

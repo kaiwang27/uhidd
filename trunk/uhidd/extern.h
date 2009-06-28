@@ -90,6 +90,7 @@ typedef struct hid_item {
 hid_parser_t	hid_parser_alloc(unsigned char *rdesc, int rsz);
 void		hid_parser_free(hid_parser_t p);
 int		hid_get_report_id_num(hid_parser_t p);
+void		hid_get_report_ids(hid_parser_t p, int *rid, int size);
 hid_data_t	hid_start_parse(hid_parser_t p, int kindset);
 void		hid_end_parse(hid_data_t s);
 int		hid_get_item(hid_data_t s, hid_item_t *h, int id);
