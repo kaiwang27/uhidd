@@ -52,6 +52,7 @@ struct hid_parent {
 	int				 ndx;
 	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
+	uint8_t				 ep;
 	pthread_t			 thread;
 	STAILQ_HEAD(, hid_child)	 hclist;
 	STAILQ_ENTRY(hid_parent)	 next;
@@ -68,7 +69,7 @@ struct hid_child {
 	STAILQ_ENTRY(hid_child)	 next;
 };
 
-int debug = 2;
+int debug = 0;
 int detach = 0;
 STAILQ_HEAD(, hid_parent) hplist;
 
@@ -185,6 +186,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 {
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_parent *hp;
+	struct libusb20_endpoint *ep;
 	unsigned char rdesc[16384];
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
@@ -222,7 +224,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	printf("%s: iface(%d) report size = %d\n", dev, ndx, ds);
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_IN |
-		LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
+	    LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
 	req.bRequest = LIBUSB20_REQUEST_GET_DESCRIPTOR;
 	req.wValue = LIBUSB20_DT_REPORT << 8;
 	req.wIndex = ndx;
@@ -244,6 +246,28 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	memcpy(hp->rdesc, rdesc, actlen);
 	hp->rsz = actlen;
 	STAILQ_INIT(&hp->hclist);
+
+	/* Find the IN interrupt endpoint. */
+	for (j = 0; j < iface->num_endpoints; j++) {
+		ep = &iface->endpoints[j];
+		if ((ep->desc.bmAttributes & LIBUSB20_TRANSFER_TYPE_MASK) ==
+		    LIBUSB20_TRANSFER_TYPE_INTERRUPT &&
+		    ((ep->desc.bEndpointAddress & LIBUSB20_ENDPOINT_DIR_MASK) ==
+		    LIBUSB20_ENDPOINT_IN)) {
+			hp->ep = ep->desc.bEndpointAddress;
+			if (debug)
+				printf("%s: iface(%d) find IN interrupt ep:"
+				    " %#x\n", dev, ndx, hp->ep);
+			break;
+		}
+	}
+	if (hp->ep == 0) {
+		printf("%s: iface(%d) does not have IN interrupt ep\n", dev,
+		    ndx);
+		free(hp);
+		return;
+	}
+
 	STAILQ_INSERT_TAIL(&hplist, hp, next);
 
 	attach_hid_parent(hp);
@@ -312,7 +336,7 @@ repair_report_desc(struct hid_child *hc)
 			if (bytes == 3)
 				pos[2] = (env._usage_page & 0xff00) >> 8;
 			hc->rsz += bytes;
-			if (debug) {
+			if (debug > 1) {
 				printf("\tnr=%d repair: insert USAGE PAGE",
 				    hc->nr);
 				for (i = 0; i < bytes; i++)
@@ -373,7 +397,7 @@ repair_report_desc(struct hid_child *hc)
 				pos[4] = env.report_count >> 24;
 			}
 			hc->rsz += bytes;
-			if (debug) {
+			if (debug > 1) {
 				printf("\tnr=%d repair: insert REPORT COUNT",
 				    hc->nr);
 				for (i = 0; i < bytes; i++)
@@ -400,15 +424,17 @@ attach_hid_parent(struct hid_parent *hp)
 	p = hid_parser_alloc(hp->rdesc, hp->rsz);
 	nr = hid_get_report_id_num(p);
 	hid_get_report_ids(p, rid, nr);
-	printf("%s: iface(%d) nr=%d ", hp->dev, hp->ndx, nr);
-	printf("rid=(");
-	for (i = 0; i < nr; i++) {
-		printf("%d", rid[i]);
-		if (i < nr - 1)
-			putchar(',');
+	if (debug) {
+		printf("%s: iface(%d) nr=%d ", hp->dev, hp->ndx, nr);
+		printf("rid=(");
+		for (i = 0; i < nr; i++) {
+			printf("%d", rid[i]);
+			if (i < nr - 1)
+				putchar(',');
+		}
+		printf(")\n");
 	}
-	printf(")\n");
-	if (debug > 0) {
+	if (debug > 1) {
 		if (nr == 0)
 			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
 			    0,
@@ -446,14 +472,8 @@ attach_hid_parent(struct hid_parent *hp)
 				    hp->ndx, start, end);
 			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
 			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
-			if (debug > 0) {
-				printf("%s: iface(%d) application start offset"
-				    " %d\n", hp->dev, hp->ndx, start);
-				printf("%s: iface(%d) application end offset"
-				    " %d\n", hp->dev, hp->ndx, end);
-				printf("%s: iface(%d) [%d-%d] ", hp->dev,
-				    hp->ndx, start, end);
-			}
+			printf("%s: iface(%d) [%d-%d] ", hp->dev, hp->ndx,
+			    start, end);
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
 				printf("mouse found\n");
@@ -466,7 +486,17 @@ attach_hid_parent(struct hid_parent *hp)
 				printf("general hid device found\n");
 				hc->type = UHIDD_HID;
 			}
+
+			/*
+			 * Here we need to "repair" some child report desc
+			 * before we can give it to the parser, since there
+			 * are possible global items(i.e. environment) missing.
+			 */
 			repair_report_desc(hc);
+
+			/*
+			 * Attach child.
+			 */
 			attach_hid_child(hc);
 		}
 	}
@@ -483,7 +513,7 @@ attach_hid_child(struct hid_child *hc)
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
-	if (debug > 0) {
+	if (debug > 1) {
 		printf("\tnr=%d ", hc->nr);
 		printf("rid=(");
 		for (i = 0; i < hc->nr; i++) {
@@ -492,11 +522,6 @@ attach_hid_child(struct hid_child *hc)
 				putchar(',');
 		}
 
-		/*
-		 * TODO well here we need to "repair" some child report desc
-		 * before we can give it to the parser, since there are possible
-		 * global items(i.e. environment) missing.
-		 */
 		printf(")\n");
 		if (hc->nr == 0)
 			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
@@ -510,19 +535,35 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_input, hc->rid[i]),
 			    hid_report_size(p, hid_output, hc->rid[i]),
 			    hid_report_size(p, hid_feature, hc->rid[i]));
-		if (debug > 1)
+		if (debug > 2)
 			dump_report_desc(hc->rdesc, hc->rsz);
 	}
+
 	/* TODO open hidctl device here. */
+
 }
 
 static void *
 start_hid_parent(void *arg)
 {
 	struct hid_parent *hp;
+/* 	int bufsize; */
 
 	hp = arg;
-	printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
+	assert(hp != NULL);
+
+	if (debug)
+		printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
+
+	for (;;) {
+
+		/* Setup libusb20 transfer. */
+		break;
+
+	}
+	
+	if (debug)
+		printf("%s: iface(%d) hid parent exit\n", hp->dev, hp->ndx);
 
 	return (NULL);
 }
