@@ -29,6 +29,9 @@ __FBSDID("$FreeBSD: trunk/uhidd/main.c 22 2009-07-24 01:10:34Z kaiw27 $");
 
 #include <sys/param.h>
 #include <sys/queue.h>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <assert.h>
 #include <err.h>
 #include <fcntl.h>
@@ -82,6 +85,7 @@ static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
 static void	attach_hid_child(struct hid_child *hc);
+static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
 static void	*start_hid_parent(void *arg);
 
@@ -117,17 +121,16 @@ main(int argc, char **argv)
 
 	STAILQ_INIT(&hplist);
 	find_and_attach(backend, *argv);
-	if (STAILQ_EMPTY(&hplist))
-		exit(0);
-	STAILQ_FOREACH(hp, &hplist, next) {
-		pthread_create(&hp->thread, NULL, start_hid_parent, (void *)hp);
-	}
-	STAILQ_FOREACH(hp, &hplist, next) {
-		pthread_join(hp->thread, NULL);
-	}
-
 	libusb20_be_free(backend);
 
+	if (STAILQ_EMPTY(&hplist))
+		exit(0);
+	STAILQ_FOREACH(hp, &hplist, next)
+		pthread_create(&hp->thread, NULL, start_hid_parent, (void *)hp);
+	STAILQ_FOREACH(hp, &hplist, next)
+		pthread_join(hp->thread, NULL);
+
+	printf("main terminated\n");
 	exit(0);
 }
 
@@ -551,7 +554,10 @@ static void *
 start_hid_parent(void *arg)
 {
 	struct hid_parent *hp;
+	struct libusb20_backend *backend;
 	struct libusb20_transfer *xfer;
+	struct libusb20_device *pdev;
+	unsigned int bus, addr;
 	char buf[4096];
 	uint32_t actlen;
 	uint8_t x;
@@ -562,6 +568,27 @@ start_hid_parent(void *arg)
 
 	if (debug)
 		printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
+
+	if (sscanf(hp->dev, "/dev/ugen%u.%u", &bus, &addr) < 2)
+		errx(1, "%s not found", hp->dev);
+
+	backend = libusb20_be_alloc_default();
+	pdev = NULL;
+	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
+		if (bus == libusb20_dev_get_bus_number(pdev) &&
+		    addr == libusb20_dev_get_address(pdev)) {
+			e = libusb20_dev_open(pdev, 32);
+			if (e != 0) {
+				printf("%s: libusb20_dev_open failed\n",
+				    hp->dev);
+				return (NULL);
+			}
+			break;
+		}
+	}
+	if (pdev == NULL)
+		errx(1, "%s not found", hp->dev);
+	hp->pdev = pdev;
 
 	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	x |= 1;
@@ -584,8 +611,6 @@ start_hid_parent(void *arg)
 
 	for (;;) {
 
-		libusb20_tr_clear_stall_sync(xfer);
-		
 		if (libusb20_tr_pending(xfer)) {
 			printf("%s: iface(%d) tr pending\n", hp->dev, hp->ndx);
 			continue;
@@ -596,8 +621,11 @@ start_hid_parent(void *arg)
 		libusb20_tr_start(xfer);
 
 		for (;;) {
-			if (libusb20_dev_process(hp->pdev) != 0)
+			if (libusb20_dev_process(hp->pdev) != 0) {
+				printf("%s: iface(%d) device detached?\n",
+				    hp->dev, hp->ndx);
 				goto parent_end;
+			}
 			if (libusb20_tr_pending(xfer) == 0)
 				break;
 			libusb20_dev_wait_process(hp->pdev, -1);
@@ -606,18 +634,24 @@ start_hid_parent(void *arg)
 		switch (libusb20_tr_get_status(xfer)) {
 		case 0:
 			actlen = libusb20_tr_get_actual_length(xfer);
-			printf("%s: iface(%d) received data(%u): ", hp->dev,
-			    hp->ndx, actlen);
-			for (i = 0; (uint32_t)i < actlen; i++)
-				printf("%02d ", buf[i]);
-			putchar('\n');
+			if (debug > 1) {
+				printf("%s: iface(%d) received data(%u): ",
+				    hp->dev, hp->ndx, actlen);
+				for (i = 0; (uint32_t)i < actlen; i++)
+					printf("%02d ", buf[i]);
+				putchar('\n');
+			}
+			dispatch(hp, buf, actlen);
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
-			printf("%s: iface(%d) TIMED OUT\n", hp->dev, hp->ndx);
+			if (debug)
+				printf("%s: iface(%d) TIMED OUT\n", hp->dev,
+				    hp->ndx);
 			break;
 		default:
-			printf("%s: iface(%d) transfer error\n", hp->dev,
-			    hp->ndx);
+			if (debug)
+				printf("%s: iface(%d) transfer error\n",
+				    hp->dev, hp->ndx);
 			break;
 		}
 	}
@@ -628,6 +662,15 @@ parent_end:
 		printf("%s: iface(%d) hid parent exit\n", hp->dev, hp->ndx);
 
 	return (NULL);
+}
+
+static void
+dispatch(struct hid_parent *hp, char *buf, int len)
+{
+	(void) hp;
+	(void) buf;
+	(void) len;
+
 }
 
 static void
