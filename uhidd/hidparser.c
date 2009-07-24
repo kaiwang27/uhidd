@@ -462,13 +462,8 @@ hid_report_size(hid_parser_t p, enum hid_kind k, int id)
 	memset(&h, 0, sizeof h);
 	size = 0;
 	for (d = hid_start_parse(p, 1<<k); hid_get_item(d, &h, id); ) {
-		if (id == 3)
-			printf("id == 3, item->kind=%d\n", h.kind);
-		if (h.report_ID == id && h.kind == k) {
+		if (h.report_ID == id && h.kind == k)
 			size = d->kindpos[id][k];
-			if (id == 3)
-				printf("id == 3, size=%d\n", size);
-		}
 	}
 	hid_end_parse(d);
 	return ((size + 7) / 8);
