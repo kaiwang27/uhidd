@@ -53,6 +53,7 @@ struct hid_parent {
 	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
 	uint8_t				 ep;
+	int				 pkt_sz;
 	pthread_t			 thread;
 	STAILQ_HEAD(, hid_child)	 hclist;
 	STAILQ_ENTRY(hid_parent)	 next;
@@ -255,9 +256,12 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		    ((ep->desc.bEndpointAddress & LIBUSB20_ENDPOINT_DIR_MASK) ==
 		    LIBUSB20_ENDPOINT_IN)) {
 			hp->ep = ep->desc.bEndpointAddress;
-			if (debug)
+			hp->pkt_sz = ep->desc.wMaxPacketSize;
+			if (debug) {
 				printf("%s: iface(%d) find IN interrupt ep:"
-				    " %#x\n", dev, ndx, hp->ep);
+				    " %#x", dev, ndx, hp->ep);
+				printf(" packet_size=%#x\n", hp->pkt_sz);
+			}
 			break;
 		}
 	}
@@ -547,7 +551,11 @@ static void *
 start_hid_parent(void *arg)
 {
 	struct hid_parent *hp;
-/* 	int bufsize; */
+	struct libusb20_transfer *xfer;
+	char buf[4096];
+	uint32_t actlen;
+	uint8_t x;
+	int e, i;
 
 	hp = arg;
 	assert(hp != NULL);
@@ -555,13 +563,67 @@ start_hid_parent(void *arg)
 	if (debug)
 		printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
 
+	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
+	x |= 1;
+	xfer = libusb20_tr_get_pointer(hp->pdev, x);
+	if (xfer == NULL) {
+		printf("%s: iface(%d) libusb20_tr_get_pointer failed\n",
+		    hp->dev, hp->ndx);
+		goto parent_end;
+	}
+		
+	e = libusb20_tr_open(xfer, 4096, 1, hp->ep);
+	if (e == LIBUSB20_ERROR_BUSY) {
+		printf("%s: iface(%d) xfer already opened\n", hp->dev,
+		    hp->ndx);
+	} else if (e) {
+		printf("%s: iface(%d) libusb20_tr_open failed\n",
+		    hp->dev, hp->ndx);
+		goto parent_end;
+	}
+
 	for (;;) {
 
-		/* Setup libusb20 transfer. */
-		break;
+		libusb20_tr_clear_stall_sync(xfer);
+		
+		if (libusb20_tr_pending(xfer)) {
+			printf("%s: iface(%d) tr pending\n", hp->dev, hp->ndx);
+			continue;
+		}
+		
+		libusb20_tr_setup_intr(xfer, buf, hp->pkt_sz, 0);
 
+		libusb20_tr_start(xfer);
+
+		for (;;) {
+			if (libusb20_dev_process(hp->pdev) != 0)
+				goto parent_end;
+			if (libusb20_tr_pending(xfer) == 0)
+				break;
+			libusb20_dev_wait_process(hp->pdev, -1);
+		}
+
+		switch (libusb20_tr_get_status(xfer)) {
+		case 0:
+			actlen = libusb20_tr_get_actual_length(xfer);
+			printf("%s: iface(%d) received data(%u): ", hp->dev,
+			    hp->ndx, actlen);
+			for (i = 0; (uint32_t)i < actlen; i++)
+				printf("%02d ", buf[i]);
+			putchar('\n');
+			break;
+		case LIBUSB20_TRANSFER_TIMED_OUT:
+			printf("%s: iface(%d) TIMED OUT\n", hp->dev, hp->ndx);
+			break;
+		default:
+			printf("%s: iface(%d) transfer error\n", hp->dev,
+			    hp->ndx);
+			break;
+		}
 	}
-	
+
+parent_end:
+
 	if (debug)
 		printf("%s: iface(%d) hid parent exit\n", hp->dev, hp->ndx);
 
