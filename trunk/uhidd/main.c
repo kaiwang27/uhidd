@@ -66,7 +66,7 @@ struct hid_child {
 	STAILQ_ENTRY(hid_child)	 next;
 };
 
-int debug = 0;
+int debug = 1;
 int detach = 0;
 STAILQ_HEAD(, hid_parent) hplist;
 
@@ -268,16 +268,20 @@ attach_hid_parent(struct hid_parent *hp)
 			putchar(',');
 	}
 	printf(")\n");
-	if (nr == 0)
-		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", 0,
-		    hid_report_size(p, hid_input, 0),
-		    hid_report_size(p, hid_output, 0),
-		    hid_report_size(p, hid_feature, 0));
-	for (i = 0; i < nr; i++)
-		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", rid[i],
-		    hid_report_size(p, hid_input, rid[i]),
-		    hid_report_size(p, hid_output, rid[i]),
-		    hid_report_size(p, hid_feature, rid[i]));
+	if (debug > 0) {
+		if (nr == 0)
+			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
+			    0,
+			    hid_report_size(p, hid_input, 0),
+			    hid_report_size(p, hid_output, 0),
+			    hid_report_size(p, hid_feature, 0));
+		for (i = 0; i < nr; i++)
+			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
+			    rid[i],
+			    hid_report_size(p, hid_input, rid[i]),
+			    hid_report_size(p, hid_output, rid[i]),
+			    hid_report_size(p, hid_feature, rid[i]));
+	}
 	memset(&h, 0, sizeof(h));
 	memset(&ch, 0, sizeof(ch));
 	start = end = 0;
@@ -303,10 +307,12 @@ attach_hid_parent(struct hid_parent *hp)
 				    hp->ndx, start, end);
 			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
 			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
-			printf("%s: iface(%d) application end offset %d\n",
-			    hp->dev, hp->ndx, end);
-			printf("%s: iface(%d) [%d-%d] ", hp->dev, hp->ndx,
-			    start, end);
+			if (debug > 0) {
+				printf("%s: iface(%d) application end offset"
+				    " %d\n", hp->dev, hp->ndx, end);
+				printf("%s: iface(%d) [%d-%d] ", hp->dev,
+				    hp->ndx, start, end);
+			}
 			if (ch.usage ==
 			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_MOUSE)) {
 				printf("mouse found\n");
@@ -335,31 +341,34 @@ attach_hid_child(struct hid_child *hc)
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
-	printf("\tnr=%d ", hc->nr);
-	printf("rid=(");
-	for (i = 0; i < hc->nr; i++) {
-		printf("%d", hc->rid[i]);
-		if (i < hc->nr - 1)
-			putchar(',');
-	}
-	/*
-	 * TODO well here we need to "repair" some child report desc before
-	 * we can give it to the parser, since there are possible global
-	 * items(i.e. environment) missing.
-	 */
-	printf(")\n");
-	if (hc->nr == 0)
-		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n", 0,
-		    hid_report_size(p, hid_input, 0),
-		    hid_report_size(p, hid_output, 0),
-		    hid_report_size(p, hid_feature, 0));
-	for (i = 0; i < hc->nr; i++)
-		printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
-		    hc->rid[i],
-		    hid_report_size(p, hid_input, hc->rid[i]),
-		    hid_report_size(p, hid_output, hc->rid[i]),
-		    hid_report_size(p, hid_feature, hc->rid[i]));
+	if (debug > 0) {
+		printf("\tnr=%d ", hc->nr);
+		printf("rid=(");
+		for (i = 0; i < hc->nr; i++) {
+			printf("%d", hc->rid[i]);
+			if (i < hc->nr - 1)
+				putchar(',');
+		}
 
+		/*
+		 * TODO well here we need to "repair" some child report desc
+		 * before we can give it to the parser, since there are possible
+		 * global items(i.e. environment) missing.
+		 */
+		printf(")\n");
+		if (hc->nr == 0)
+			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
+			    0,
+			    hid_report_size(p, hid_input, 0),
+			    hid_report_size(p, hid_output, 0),
+			    hid_report_size(p, hid_feature, 0));
+		for (i = 0; i < hc->nr; i++)
+			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
+			    hc->rid[i],
+			    hid_report_size(p, hid_input, hc->rid[i]),
+			    hid_report_size(p, hid_output, hc->rid[i]),
+			    hid_report_size(p, hid_feature, hc->rid[i]));
+	}
 	/* TODO open hidctl device here. */
 }
 
