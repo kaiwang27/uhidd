@@ -29,6 +29,7 @@ __FBSDID("$FreeBSD: trunk/uhidd/main.c 22 2009-07-24 01:10:34Z kaiw27 $");
 
 #include <sys/param.h>
 #include <sys/queue.h>
+#include <assert.h>
 #include <err.h>
 #include <fcntl.h>
 #include <libusb20.h>
@@ -63,6 +64,7 @@ struct hid_child {
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
+	hid_item_t		 env;
 	STAILQ_ENTRY(hid_child)	 next;
 };
 
@@ -78,6 +80,7 @@ static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
 static void	attach_hid_child(struct hid_child *hc);
+static void	repair_report_desc(struct hid_child *hc);
 static void	*start_hid_parent(void *arg);
 
 int
@@ -247,6 +250,143 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 }
 
 static void
+repair_report_desc(struct hid_child *hc)
+{
+	struct hid_parent *hp;
+	struct hid_child *phc;
+	unsigned int bTag, bType, bSize;
+	unsigned char *b, *pos;
+	hid_item_t env;
+	int bytes, i;
+
+	hp = hc->parent;
+	assert(hp != NULL);
+
+	/* First child does not need repairing. */
+	phc = STAILQ_FIRST(&hp->hclist);
+	if (phc == hc)
+		return;
+
+	while (STAILQ_NEXT(phc, next) != hc)
+		phc = STAILQ_NEXT(phc, next);
+	env = phc->env;
+
+	/* First step: insert USAGE PAGE before USAGE if need. */
+	b = hc->rdesc;
+	while (b < hc->rdesc + hc->rsz) {
+		pos = b;
+		bSize = *b++;
+		if (bSize == 0xfe) {
+			/* long item */
+			bSize = *b++;
+			bTag = *b++;
+			b += bSize;
+			continue;
+		}
+
+		/* short item */
+		bTag = bSize >> 4;
+		bType = (bSize >> 2) & 3;
+		bSize &= 3;
+		if (bSize == 3)
+			bSize = 4;
+		b += bSize;
+
+		/* If we found a USAGE PAGE, no need to continue. */
+		if (bType == 1 && bTag == 0)
+			break;
+
+		/* Check if it is USAGE item. */
+		if (bType == 2 && bTag == 0) {
+			/*
+			 * We need to insert USAGE PAGE before this
+			 * USAGE. USAGE PAGE needs 3-byte space.
+			 */
+			if (env._usage_page < 256)
+				bytes = 2;
+			else
+				bytes = 3;
+			memmove(pos + bytes, pos, hc->rsz - (pos - hc->rdesc));
+			pos[0] = (1 << 2) | (bytes - 1);
+			pos[1] = env._usage_page & 0xff;
+			if (bytes == 3)
+				pos[2] = (env._usage_page & 0xff00) >> 8;
+			hc->rsz += bytes;
+			if (debug) {
+				printf("\tnr=%d repair: insert USAGE PAGE",
+				    hc->nr);
+				for (i = 0; i < bytes; i++)
+					printf(" 0x%02x", pos[i]);
+				putchar('\n');
+			}
+			break;
+		}
+
+	}
+
+	/*
+	 * Second step: insert missing REPORT COUNT before the first main
+	 * item.
+	 */
+	b = hc->rdesc;
+	while (b < hc->rdesc + hc->rsz) {
+		pos = b;
+		bSize = *b++;
+		if (bSize == 0xfe) {
+			/* long item */
+			bSize = *b++;
+			bTag = *b++;
+			b += bSize;
+			continue;
+		}
+
+		/* short item */
+		bTag = bSize >> 4;
+		bType = (bSize >> 2) & 3;
+		bSize &= 3;
+		if (bSize == 3)
+			bSize = 4;
+		b += bSize;
+
+		/* Check if we already got REPORT COUNT. */
+		if (bType == 1 && bTag == 9)
+			break;
+
+		/* Check if it is INPUT, OUTPUT or FEATURE. */
+		if (bType == 0 && (bTag == 8 || bTag == 9 || bTag == 11)) {
+			if (env.report_count < 256)
+				bytes = 2;
+			else if (env.report_count < 65536)
+				bytes = 3;
+			else
+				bytes = 5;
+			memmove(pos + bytes, pos, hc->rsz - (pos - hc->rdesc));
+			if (bytes < 5)
+				pos[0] = (9 << 4) | (1 << 2) | (bytes - 1);
+			else
+				pos[0] = (9 << 4) | (1 << 2) | 3;
+			pos[1] = env.report_count & 0xff;
+			if (bytes > 2)
+				pos[2] = (env.report_count & 0xff00) >> 8;
+			if (bytes > 3) {
+				pos[3] = (env.report_count & 0xff0000) >> 16;
+				pos[4] = env.report_count >> 24;
+			}
+			hc->rsz += bytes;
+			if (debug) {
+				printf("\tnr=%d repair: insert REPORT COUNT",
+				    hc->nr);
+				for (i = 0; i < bytes; i++)
+					printf(" 0x%02x", pos[i]);
+				putchar('\n');
+			}
+			break;
+		}
+	}
+}
+
+
+static void
 attach_hid_parent(struct hid_parent *hp)
 {
 	struct hid_child *hc;
@@ -287,9 +427,8 @@ attach_hid_parent(struct hid_parent *hp)
 	start = end = lend = 0;
 	for (d = hid_start_parse(p, 1<<hid_collection | 1<<hid_endcollection);
 	     hid_get_item(d, &h, -1); ) {
-		if (h.kind == hid_collection && h.collection == 0x01) {
+		if (h.kind == hid_collection && h.collection == 0x01)
 			ch = h;
-		}
 		if (h.kind == hid_endcollection &&
 		    ch.collevel - 1 == h.collevel) {
 			end = d->p - d->start;
@@ -297,6 +436,7 @@ attach_hid_parent(struct hid_parent *hp)
 			if (hc == NULL)
 				err(1, "calloc");
 			hc->parent = hp;
+			hc->env = h;
 			start = lend;
 			lend = end;
 			hc->rsz = end - start;
@@ -326,6 +466,7 @@ attach_hid_parent(struct hid_parent *hp)
 				printf("general hid device found\n");
 				hc->type = UHIDD_HID;
 			}
+			repair_report_desc(hc);
 			attach_hid_child(hc);
 		}
 	}
