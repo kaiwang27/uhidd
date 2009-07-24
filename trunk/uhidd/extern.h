@@ -114,6 +114,7 @@ struct hid_data {
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
 
+void		dump_report_desc(unsigned char *rdesc, int size);
 hid_parser_t	hid_parser_alloc(unsigned char *rdesc, int rsz);
 void		hid_parser_free(hid_parser_t p);
 int		hid_get_report_id_num(hid_parser_t p);
@@ -126,3 +127,5 @@ int		hid_locate(hid_parser_t p, unsigned int u, enum hid_kind k,
     hid_item_t *h);
 int		hid_get_data(const void *p, const hid_item_t *h);
 void		hid_set_data(void *p, const hid_item_t *h, int data);
+const char	*usage_page(int i);
+const char	*usage_in_page(int i, int j);

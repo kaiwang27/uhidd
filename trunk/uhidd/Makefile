@@ -1,5 +1,5 @@
 PROG=	uhidd
-SRCS=	hidparser.c main.c
+SRCS=	hidparser.c hidump.c main.c usage_in_page.c usage_page.c
 
 NO_MAN=
 

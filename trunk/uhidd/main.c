@@ -290,8 +290,9 @@ attach_hid_parent(struct hid_parent *hp)
 		if (h.kind == hid_collection && h.collection == 0x01) {
 			start = d->p - d->start;
 			ch = h;
-			printf("%s: iface(%d) application start offset %d\n",
-			    hp->dev, hp->ndx, start);
+			if (debug > 0)
+				printf("%s: iface(%d) application start offset"
+				    " %d\n", hp->dev, hp->ndx, start);
 		}
 		if (h.kind == hid_endcollection &&
 		    ch.collevel - 1 == h.collevel) {
@@ -313,8 +314,8 @@ attach_hid_parent(struct hid_parent *hp)
 				printf("%s: iface(%d) [%d-%d] ", hp->dev,
 				    hp->ndx, start, end);
 			}
-			if (ch.usage ==
-			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_MOUSE)) {
+			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
+			    HUG_MOUSE)) {
 				printf("mouse found\n");
 				hc->type = UHIDD_MOUSE;
 			} else if (ch.usage ==
@@ -368,6 +369,7 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_input, hc->rid[i]),
 			    hid_report_size(p, hid_output, hc->rid[i]),
 			    hid_report_size(p, hid_feature, hc->rid[i]));
+		dump_report_desc(hc->rdesc, hc->rsz);
 	}
 	/* TODO open hidctl device here. */
 }
