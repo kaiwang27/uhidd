@@ -66,7 +66,7 @@ struct hid_child {
 	STAILQ_ENTRY(hid_child)	 next;
 };
 
-int debug = 1;
+int debug = 2;
 int detach = 0;
 STAILQ_HEAD(, hid_parent) hplist;
 
@@ -254,7 +254,7 @@ attach_hid_parent(struct hid_parent *hp)
 	hid_data_t d;
 	hid_item_t h, ch;
 	int rid[_MAX_REPORT_IDS];
-	int i, nr, start, end;
+	int i, nr, start, end, lend;
 
 	/* Check how many children we have. */
 	p = hid_parser_alloc(hp->rdesc, hp->rsz);
@@ -284,23 +284,21 @@ attach_hid_parent(struct hid_parent *hp)
 	}
 	memset(&h, 0, sizeof(h));
 	memset(&ch, 0, sizeof(ch));
-	start = end = 0;
+	start = end = lend = 0;
 	for (d = hid_start_parse(p, 1<<hid_collection | 1<<hid_endcollection);
 	     hid_get_item(d, &h, -1); ) {
 		if (h.kind == hid_collection && h.collection == 0x01) {
-			start = d->p - d->start;
 			ch = h;
-			if (debug > 0)
-				printf("%s: iface(%d) application start offset"
-				    " %d\n", hp->dev, hp->ndx, start);
 		}
 		if (h.kind == hid_endcollection &&
 		    ch.collevel - 1 == h.collevel) {
-			end = d->p - d->start - 1;
+			end = d->p - d->start;
 			hc = calloc(1, sizeof(*hc));
 			if (hc == NULL)
 				err(1, "calloc");
 			hc->parent = hp;
+			start = lend;
+			lend = end;
 			hc->rsz = end - start;
 			if (hc->rsz <= 0 || hc->rsz > _MAX_RDESC_SIZE)
 				errx(1, "%s: iface(%d) invalid hid child"
@@ -309,6 +307,8 @@ attach_hid_parent(struct hid_parent *hp)
 			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
 			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
 			if (debug > 0) {
+				printf("%s: iface(%d) application start offset"
+				    " %d\n", hp->dev, hp->ndx, start);
 				printf("%s: iface(%d) application end offset"
 				    " %d\n", hp->dev, hp->ndx, end);
 				printf("%s: iface(%d) [%d-%d] ", hp->dev,
@@ -369,7 +369,8 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_input, hc->rid[i]),
 			    hid_report_size(p, hid_output, hc->rid[i]),
 			    hid_report_size(p, hid_feature, hc->rid[i]));
-		dump_report_desc(hc->rdesc, hc->rsz);
+		if (debug > 1)
+			dump_report_desc(hc->rdesc, hc->rsz);
 	}
 	/* TODO open hidctl device here. */
 }
