@@ -27,6 +27,8 @@
  * $FreeBSD: trunk/uhidd/extern.h 22 2009-07-24 01:10:34Z kaiw27 $
  */
 
+#include <sys/queue.h>
+
 #define	_MAX_RDESC_SIZE	16384
 #define	_MAX_REPORT_IDS	256
 #define MAXUSAGE 100
@@ -37,7 +39,6 @@ enum uhidd_ctype {
 	UHIDD_HID
 };
 
-struct hid_parser;
 struct hid_parser {
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
@@ -111,21 +112,56 @@ struct hid_data {
 	unsigned int kindpos[_MAX_REPORT_IDS][3];
 };
 
+struct mouse_dev {
+	int dx;
+	int dy;
+	int dz;
+	int buttons;
+};
+
+struct hid_child;
+
+struct hid_parent {
+	const char			*dev;
+	struct libusb20_device		*pdev;
+	struct libusb20_interface	*iface;
+	int				 ndx;
+	unsigned char			 rdesc[_MAX_RDESC_SIZE];
+	int				 rsz;
+	uint8_t				 ep;
+	int				 pkt_sz;
+	pthread_t			 thread;
+	STAILQ_HEAD(, hid_child)	 hclist;
+	STAILQ_ENTRY(hid_parent)	 next;
+};
+
+struct hid_child {
+	struct hid_parent	*parent;
+	enum uhidd_ctype	 type;
+	unsigned char		 rdesc[_MAX_RDESC_SIZE];
+	int			 rsz;
+	int			 rid[_MAX_REPORT_IDS];
+	int			 nr;
+	hid_item_t		 env;
+	STAILQ_ENTRY(hid_child)	 next;
+};
+
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
 
-void		dump_report_desc(unsigned char *rdesc, int size);
-hid_parser_t	hid_parser_alloc(unsigned char *rdesc, int rsz);
-void		hid_parser_free(hid_parser_t p);
-int		hid_get_report_id_num(hid_parser_t p);
-void		hid_get_report_ids(hid_parser_t p, int *rid, int size);
-hid_data_t	hid_start_parse(hid_parser_t p, int kindset);
-void		hid_end_parse(hid_data_t s);
-int		hid_get_item(hid_data_t s, hid_item_t *h, int id);
-int		hid_report_size(hid_parser_t p, enum hid_kind k, int id);
-int		hid_locate(hid_parser_t p, unsigned int u, enum hid_kind k,
-    hid_item_t *h);
-int		hid_get_data(const void *p, const hid_item_t *h);
-void		hid_set_data(void *p, const hid_item_t *h, int data);
-const char	*usage_page(int i);
-const char	*usage_in_page(int i, int j);
+void		dump_report_desc(unsigned char *, int);
+hid_parser_t	hid_parser_alloc(unsigned char *, int);
+void		hid_parser_free(hid_parser_t);
+int		hid_get_report_id_num(hid_parser_t);
+void		hid_get_report_ids(hid_parser_t, int *, int);
+hid_data_t	hid_start_parse(hid_parser_t, int);
+void		hid_end_parse(hid_data_t);
+int		hid_get_item(hid_data_t, hid_item_t *, int);
+int		hid_report_size(hid_parser_t, enum hid_kind, int);
+int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
+		    hid_item_t *);
+int		hid_get_data(const void *, const hid_item_t *);
+void		hid_set_data(void *, const hid_item_t *, int);
+void		mouse_recv(struct hid_child *, char *, int);
+const char	*usage_page(int);
+const char	*usage_in_page(int, int);

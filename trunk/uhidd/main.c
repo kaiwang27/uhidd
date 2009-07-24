@@ -25,10 +25,9 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: trunk/uhidd/main.c 22 2009-07-24 01:10:34Z kaiw27 $");
+__FBSDID("$FreeBSD $");
 
 #include <sys/param.h>
-#include <sys/queue.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -46,33 +45,6 @@ __FBSDID("$FreeBSD: trunk/uhidd/main.c 22 2009-07-24 01:10:34Z kaiw27 $");
 
 #include "extern.h"
 
-struct hid_child;
-
-struct hid_parent {
-	const char			*dev;
-	struct libusb20_device		*pdev;
-	struct libusb20_interface	*iface;
-	int				 ndx;
-	unsigned char			 rdesc[_MAX_RDESC_SIZE];
-	int				 rsz;
-	uint8_t				 ep;
-	int				 pkt_sz;
-	pthread_t			 thread;
-	STAILQ_HEAD(, hid_child)	 hclist;
-	STAILQ_ENTRY(hid_parent)	 next;
-};
-
-struct hid_child {
-	struct hid_parent	*parent;
-	enum uhidd_ctype	 type;
-	unsigned char		 rdesc[_MAX_RDESC_SIZE];
-	int			 rsz;
-	int			 rid[_MAX_REPORT_IDS];
-	int			 nr;
-	hid_item_t		 env;
-	STAILQ_ENTRY(hid_child)	 next;
-};
-
 int debug = 0;
 int detach = 0;
 STAILQ_HEAD(, hid_parent) hplist;
@@ -85,6 +57,7 @@ static void	attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
 static void	attach_hid_child(struct hid_child *hc);
+static void	child_recv(struct hid_child *hc, char *buf, int len);
 static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
 static void	*start_hid_parent(void *arg);
@@ -667,10 +640,64 @@ parent_end:
 static void
 dispatch(struct hid_parent *hp, char *buf, int len)
 {
-	(void) hp;
-	(void) buf;
-	(void) len;
+	struct hid_child *hc;
+	int i;
 
+	if (STAILQ_EMPTY(&hp->hclist)) {
+		printf("%s: iface(%d) no hid child device exist, "
+		    "packet discarded.", hp->dev, hp->ndx);
+		return;
+	}
+
+	STAILQ_FOREACH(hc, &hp->hclist, next) {
+		if (hc->nr == 0) {
+			/*
+			 * If the child has no report IDs at all, just dispatch
+			 * this packet to it.
+			 */
+			child_recv(hc, buf, len);
+			return;
+		}
+		for (i = 0; i < hc->nr; i++) {
+			if (hc->rid[i] == buf[0]) {
+				child_recv(hc, buf, len);
+				return;
+			}
+		}
+	}
+
+	/*
+	 * If there are no matching child device, the report desc is probably
+	 * broken. Just send the packet to the first child.
+	 */
+	if (hc == NULL) {
+		if (debug)
+			printf("%s: iface(%d) packet doesn't belong to any"
+			    " hid child, packet sent to the first child.",
+			    hp->dev, hp->ndx);
+		hc = STAILQ_FIRST(&hp->hclist);
+		child_recv(hc, buf, len);
+	}
+}
+
+static void
+child_recv(struct hid_child *hc, char *buf, int len)
+{
+
+	switch (hc->type) {
+	case UHIDD_MOUSE:
+		mouse_recv(hc, buf, len);
+		break;
+	case UHIDD_KEYBOARD:
+/* 		kbd_recv(hc, buf, len); */
+		break;
+	case UHIDD_HID:
+/* 		hid_recv(hc, buf, len); */
+		break;
+	default:
+		/* Internal Error! */
+		assert(0);
+	}
 }
 
 static void
