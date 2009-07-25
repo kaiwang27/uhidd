@@ -441,6 +441,7 @@ attach_hid_parent(struct hid_parent *hp)
 			hc = calloc(1, sizeof(*hc));
 			if (hc == NULL)
 				err(1, "calloc");
+			hc->cons_fd = -1;
 			hc->parent = hp;
 			hc->env = h;
 			start = lend;
@@ -518,9 +519,22 @@ attach_hid_child(struct hid_child *hc)
 		if (debug > 2)
 			dump_report_desc(hc->rdesc, hc->rsz);
 	}
+	hc->p = p;
 
-	/* TODO open hidctl device here. */
-
+	switch (hc->type) {
+	case UHIDD_MOUSE:
+		mouse_attach(hc);
+		break;
+	case UHIDD_KEYBOARD:
+/* 		kbd_attach(hc); */
+		break;
+	case UHIDD_HID:
+/* 		hid_attach(hc); */
+		break;
+	default:
+		/* Internal Error! */
+		assert(0);
+	}
 }
 
 static void *

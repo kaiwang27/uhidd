@@ -33,6 +33,8 @@
 #define	_MAX_REPORT_IDS	256
 #define MAXUSAGE 100
 
+extern int debug;
+
 enum uhidd_ctype {
 	UHIDD_MOUSE,
 	UHIDD_KEYBOARD,
@@ -112,11 +114,15 @@ struct hid_data {
 	unsigned int kindpos[_MAX_REPORT_IDS][3];
 };
 
+#define	BUTTON_MAX	31
+
 struct mouse_dev {
-	int dx;
-	int dy;
-	int dz;
-	int buttons;
+	hid_item_t x;
+	hid_item_t y;
+	hid_item_t wheel;
+	hid_item_t btn[BUTTON_MAX];
+	int btn_cnt;
+	int flags;
 };
 
 struct hid_child;
@@ -138,11 +144,16 @@ struct hid_parent {
 struct hid_child {
 	struct hid_parent	*parent;
 	enum uhidd_ctype	 type;
+	int			 cons_fd;
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
 	hid_item_t		 env;
+	hid_parser_t		 p;
+	union {
+		struct mouse_dev md;
+	} u;
 	STAILQ_ENTRY(hid_child)	 next;
 };
 
@@ -162,6 +173,7 @@ int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
 		    hid_item_t *);
 int		hid_get_data(const void *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
+void		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
