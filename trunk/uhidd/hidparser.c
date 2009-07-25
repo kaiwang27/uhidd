@@ -495,6 +495,11 @@ hid_get_data(const void *p, const hid_item_t *h)
 	int i, end, offs;
 
 	buf = p;
+	if (h->report_ID > 0) {
+		if (h->report_ID != *buf)
+			return (0);
+		buf++;
+	}
 	hpos = h->pos;			/* bit position of data */
 	hsize = h->report_size;		/* bit length of data */
 
