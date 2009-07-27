@@ -30,11 +30,12 @@
 __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 
 #include <sys/param.h>
+#include <dev/usb/usb.h>
+#include <dev/usb/usbhid.h>
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dev/usb/usbhid.h>
 
 #include "extern.h"
 

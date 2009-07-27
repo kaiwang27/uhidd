@@ -31,6 +31,8 @@ __FBSDID("$FreeBSD $");
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <dev/usb/usb.h>
+#include <dev/usb/usbhid.h>
 #include <assert.h>
 #include <err.h>
 #include <fcntl.h>
@@ -41,7 +43,6 @@ __FBSDID("$FreeBSD $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <dev/usb/usbhid.h>
 
 #include "extern.h"
 
