@@ -517,8 +517,13 @@ kbd_attach(struct hid_child *hc)
 		if (debug)
 			printf("%s: iface(%d) modifiers (%d)\n", hp->dev,
 			    hp->ndx, KBD.mods.pos);
+		/* We want the 8bit long data start from LeftControl. */
+		KBD.mods.report_size = 8;
 	} else
 		printf("%s: iface(%d) warning: no modifiers\n", hp->dev, hp->ndx);
+
+
+	
 
 	/* Find the location of keycode array. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 0), hid_input,

@@ -134,7 +134,7 @@ mouse_recv(struct hid_child *hc, char *buf, int len)
 
 	dx = hid_get_data(buf, &hc->u.md.x);
 	dy = hid_get_data(buf, &hc->u.md.y);
-	dw = hid_get_data(buf, &hc->u.md.wheel);
+	dw = -hid_get_data(buf, &hc->u.md.wheel);
 	btn = 0;
 	for (i = 0; i < hc->u.md.btn_cnt; i++) {
 		if (i == 1)
