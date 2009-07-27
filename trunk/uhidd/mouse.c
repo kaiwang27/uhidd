@@ -50,13 +50,11 @@ mouse_attach(struct hid_child *hc)
 	assert(hp != NULL);
 
 	/* Open /dev/consolectl if need. */
-	if (hc->cons_fd < 0) {
-		hc->cons_fd = open("/dev/consolectl", O_RDWR);
-		if (hc->cons_fd < 0) {
-			printf("%s: iface(%d) could not open /dev/consolectl:"
-			    " %s", hp->dev, hp->ndx, strerror(errno));
-			return;
-		}
+	hc->u.md.cons_fd = open("/dev/consolectl", O_RDWR);
+	if (hc->u.md.cons_fd < 0) {
+		printf("%s: iface(%d) could not open /dev/consolectl:"
+		    " %s", hp->dev, hp->ndx, strerror(errno));
+		return;
 	}
 
 	/* Find X Axis. */
@@ -159,7 +157,7 @@ mouse_recv(struct hid_child *hc, char *buf, int len)
 	mi.u.data.z = dw;
 	mi.u.data.buttons = btn;
 
-	if (ioctl(hc->cons_fd, CONS_MOUSECTL, &mi) < 0)
+	if (ioctl(hc->u.md.cons_fd, CONS_MOUSECTL, &mi) < 0)
 		printf("%s: iface(%d) could not submit mouse data: ioctl: %s\n",
 		    hp->dev, hp->ndx, strerror(errno));
 }

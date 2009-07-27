@@ -441,7 +441,6 @@ attach_hid_parent(struct hid_parent *hp)
 			hc = calloc(1, sizeof(*hc));
 			if (hc == NULL)
 				err(1, "calloc");
-			hc->cons_fd = -1;
 			hc->parent = hp;
 			hc->env = h;
 			start = lend;
@@ -526,7 +525,7 @@ attach_hid_child(struct hid_child *hc)
 		mouse_attach(hc);
 		break;
 	case UHIDD_KEYBOARD:
-/* 		kbd_attach(hc); */
+		kbd_attach(hc);
 		break;
 	case UHIDD_HID:
 /* 		hid_attach(hc); */
@@ -703,7 +702,7 @@ child_recv(struct hid_child *hc, char *buf, int len)
 		mouse_recv(hc, buf, len);
 		break;
 	case UHIDD_KEYBOARD:
-/* 		kbd_recv(hc, buf, len); */
+		kbd_recv(hc, buf, len);
 		break;
 	case UHIDD_HID:
 /* 		hid_recv(hc, buf, len); */

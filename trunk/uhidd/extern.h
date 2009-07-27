@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2009 Kai Wang
+ * All rights reserved.
  * Copyright (c) 1999 Lennart Augustsson <augustss@netbsd.org>
  * All rights reserved.
  *
@@ -117,12 +118,39 @@ struct hid_data {
 #define	BUTTON_MAX	31
 
 struct mouse_dev {
+	int cons_fd;
 	hid_item_t x;
 	hid_item_t y;
 	hid_item_t wheel;
 	hid_item_t btn[BUTTON_MAX];
 	int btn_cnt;
 	int flags;
+};
+
+#define	MAX_KEYCODE	16
+
+struct kbd_data {
+	uint8_t mod;
+
+#define	MOD_CONTROL_L	0x01
+#define	MOD_CONTROL_R	0x10
+#define	MOD_SHIFT_L	0x02
+#define	MOD_SHIFT_R	0x20
+#define	MOD_ALT_L	0x04
+#define	MOD_ALT_R	0x40
+#define	MOD_WIN_L	0x08
+#define	MOD_WIN_R	0x80
+
+	uint8_t keycode[MAX_KEYCODE];
+};
+
+struct kbd_dev {
+	int vkbd_fd;
+	hid_item_t mods;
+	hid_item_t keys;
+	int key_cnt;
+	struct kbd_data ndata;
+	struct kbd_data odata;
 };
 
 struct hid_child;
@@ -144,7 +172,6 @@ struct hid_parent {
 struct hid_child {
 	struct hid_parent	*parent;
 	enum uhidd_ctype	 type;
-	int			 cons_fd;
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
@@ -153,6 +180,7 @@ struct hid_child {
 	hid_parser_t		 p;
 	union {
 		struct mouse_dev md;
+		struct kbd_dev kd;
 	} u;
 	STAILQ_ENTRY(hid_child)	 next;
 };
@@ -172,7 +200,10 @@ int		hid_report_size(hid_parser_t, enum hid_kind, int);
 int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
 		    hid_item_t *);
 int		hid_get_data(const void *, const hid_item_t *);
+int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
+void		kbd_attach(struct hid_child *);
+void		kbd_recv(struct hid_child *, char *, int);
 void		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
 const char	*usage_page(int);
