@@ -31,12 +31,13 @@ __FBSDID("$FreeBSD $");
 #include <sys/ioctl.h>
 #include <sys/mouse.h>
 #include <sys/consio.h>
+#include <dev/usb/usb.h>
+#include <dev/usb/usbhid.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <dev/usb/usbhid.h>
 
 #include "extern.h"
 

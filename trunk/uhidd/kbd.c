@@ -69,6 +69,7 @@ __FBSDID("$FreeBSD $");
 
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
 #include <assert.h>
 #include <errno.h>
