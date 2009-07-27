@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2009 Kai Wang
+ * All rights reserved.
  * Copyright (c) 1999, 2001 Lennart Augustsson <augustss@netbsd.org>
  * All rights reserved.
  *
@@ -518,6 +519,37 @@ hid_get_data(const void *p, const hid_item_t *h)
 		data = (data << hsize) >> hsize;
 	}
 	return (data);
+}
+
+int
+hid_get_array8(const void *p, uint8_t *r, const hid_item_t *h)
+{
+	const uint8_t *buf;
+	unsigned int hpos;
+	unsigned int hsize;
+	int i, offs;
+
+	buf = p;
+	if (h->report_ID > 0) {
+		if (h->report_ID != *buf)
+			return (0);
+		buf++;
+	}
+	if (h->report_size != 8)
+		return (0);
+
+	hpos = h->pos;
+	hsize = h->report_count; /* byte length of data */
+
+	if (hsize == 0 || hpos % 8 != 0)
+		return (0);
+
+	offs = hpos / 8;
+
+	for (i = 0; (unsigned int)i < hsize; i++)
+		r[i] = buf[offs + i];
+
+	return (hsize);
 }
 
 void
