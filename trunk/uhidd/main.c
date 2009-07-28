@@ -89,6 +89,8 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
+	read_config_file();
+
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL)
 		errx(1, "can not alloc backend");

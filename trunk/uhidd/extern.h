@@ -206,5 +206,6 @@ void		kbd_attach(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);
 void		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
+void		read_config_file(void);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
