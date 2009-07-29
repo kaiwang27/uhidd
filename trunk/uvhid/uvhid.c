@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/taskqueue.h>
 #include <sys/uio.h>
+#include <sys/queue.h>
 
 #define	UVHID_NAME	"uvhid"
 #define	UVHIDCTL_NAME	"uvhidctl"
@@ -45,6 +46,8 @@ __FBSDID("$FreeBSD$");
 MALLOC_DECLARE(M_UVHID);
 MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 
+#define UVHID_LOCK_GLOBAL()	mtx_lock(&uvhidmtx);
+#define UVHID_UNLOCK_GLOBAL()	mtx_unlock(&uvhidmtx);
 #define UVHID_LOCK(s)		mtx_lock(&(s)->us_mtx)
 #define UVHID_UNLOCK(s)		mtx_unlock(&(s)->us_mtx)
 #define UVHID_LOCK_ASSERT(s, w)	mtx_assert(&(s)->us_mtx, w)
@@ -69,7 +72,14 @@ struct uvhid_softc {
 
 	int		us_hcflags;
 	int		us_hflags;
+	STAILQ_ENTRY(uvhid_softc) us_next;
 };
+
+/* Global mutex to protect the softc list. */
+static struct mtx uvhidmtx;
+static STAILQ_HEAD(, uvhid_softc) hidhead = STAILQ_HEAD_INITIALIZER(hidhead);
+static struct clonedevs	*hidctl_clones = NULL;
+static struct clonedevs	*hid_clones = NULL;
 
 static void	hidctl_clone(void *arg, struct ucred *cred, char *name,
     int namelen, struct cdev **dev);
@@ -119,9 +129,6 @@ static struct cdevsw hid_cdevsw = {
 	.d_name	   = UVHID_NAME,
 };
 
-static struct clonedevs	*hidctl_clones = NULL;
-static struct clonedevs	*hid_clones = NULL;
-
 static void
 hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
     struct cdev **dev)
@@ -169,9 +176,20 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 	struct uvhid_softc *sc;
 
 	sc = malloc(sizeof(*sc), M_UVHID, M_WAITOK|M_ZERO);
-	mtx_init(&sc->us_mtx, "uvhid_lock", NULL, MTX_DEF | MTX_RECURSE);
+	mtx_init(&sc->us_mtx, "uvhidmtx", NULL, MTX_DEF | MTX_RECURSE);
 	hidctl_dev->si_drv1 = sc;
 	hid_dev->si_drv1 = sc;
+	UVHID_LOCK_GLOBAL();
+	STAILQ_INSERT_TAIL(&hidhead, sc, us_next);
+	UVHID_UNLOCK_GLOBAL();
+}
+
+static void
+hidctl_destroy(struct uvhid_softc *sc)
+{
+
+	mtx_destroy(&sc->us_mtx);
+	free(sc, M_UVHID);
 }
 
 static int
@@ -476,9 +494,11 @@ static int
 uvhid_modevent(module_t mod, int type, void *data)
 {
 	static eventhandler_tag	tag;
+	struct uvhid_softc *sc;
 
 	switch (type) {
 	case MOD_LOAD:
+		mtx_init(&uvhidmtx, "uvhidgmtx", NULL, MTX_DEF);
 		clone_setup(&hidctl_clones);
 		clone_setup(&hid_clones);
 		tag = EVENTHANDLER_REGISTER(dev_clone, hidctl_clone, 0, 1000);
@@ -490,8 +510,15 @@ uvhid_modevent(module_t mod, int type, void *data)
 
 	case MOD_UNLOAD:
 		EVENTHANDLER_DEREGISTER(dev_clone, tag);
+		UVHID_LOCK_GLOBAL();
+		while ((sc = STAILQ_FIRST(&hidhead)) != NULL) {
+			STAILQ_REMOVE(&hidhead, sc, uvhid_softc, us_next);
+			hidctl_destroy(sc);
+		}
+		UVHID_UNLOCK_GLOBAL();
 		clone_cleanup(&hidctl_clones);
 		clone_cleanup(&hid_clones);
+		mtx_destroy(&uvhidmtx);
 		break;
 
 	default:
