@@ -29,6 +29,8 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/conf.h>
+#include <sys/proc.h>
+#include <sys/condvar.h>
 #include <sys/fcntl.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
@@ -65,13 +67,14 @@ struct uvhid_softc {
 	struct rqueue	us_rq;
 	struct rqueue	us_wq;
 	struct mtx	us_mtx;
+	struct cv	us_cv;
+	int		us_hcflags;
+	int		us_hflags;
 
 #define	OPEN	(1 << 0)	/* device is open */
 #define	READ	(1 << 1)	/* read pending */
 #define	WRITE	(1 << 2)	/* write pending */
 
-	int		us_hcflags;
-	int		us_hflags;
 	STAILQ_ENTRY(uvhid_softc) us_next;
 };
 
@@ -177,18 +180,24 @@ hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev)
 
 	sc = malloc(sizeof(*sc), M_UVHID, M_WAITOK|M_ZERO);
 	mtx_init(&sc->us_mtx, "uvhidmtx", NULL, MTX_DEF | MTX_RECURSE);
+	cv_init(&sc->us_cv, "uvhidcv");
 	hidctl_dev->si_drv1 = sc;
 	hid_dev->si_drv1 = sc;
 	UVHID_LOCK_GLOBAL();
 	STAILQ_INSERT_TAIL(&hidhead, sc, us_next);
 	UVHID_UNLOCK_GLOBAL();
 }
-
 static void
 hidctl_destroy(struct uvhid_softc *sc)
 {
 
+	UVHID_LOCK(sc);
+	if (((sc->us_hcflags & OPEN) != 0) || ((sc->us_hflags & OPEN) != 0))
+		cv_wait_unlock(&sc->us_cv, &sc->us_mtx);
+	else
+		UVHID_UNLOCK(sc);
 	mtx_destroy(&sc->us_mtx);
+	cv_destroy(&sc->us_cv);
 	free(sc, M_UVHID);
 }
 
@@ -219,6 +228,8 @@ hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 	sc->us_hcflags &= ~OPEN;
 	rq_reset(&sc->us_rq);
 	rq_reset(&sc->us_wq);
+	if ((sc->us_hflags & OPEN) == 0)
+		cv_broadcast(&sc->us_cv);
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -278,6 +289,8 @@ hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 
 	UVHID_LOCK(sc);
 	sc->us_hflags &= ~OPEN;
+	if ((sc->us_hcflags & OPEN) == 0)
+		cv_broadcast(&sc->us_cv);
 	UVHID_UNLOCK(sc);
 
 	return (0);
@@ -513,7 +526,9 @@ uvhid_modevent(module_t mod, int type, void *data)
 		UVHID_LOCK_GLOBAL();
 		while ((sc = STAILQ_FIRST(&hidhead)) != NULL) {
 			STAILQ_REMOVE(&hidhead, sc, uvhid_softc, us_next);
+			UVHID_UNLOCK_GLOBAL();
 			hidctl_destroy(sc);
+			UVHID_LOCK_GLOBAL();
 		}
 		UVHID_UNLOCK_GLOBAL();
 		clone_cleanup(&hidctl_clones);
