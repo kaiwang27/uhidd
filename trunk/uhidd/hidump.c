@@ -25,7 +25,7 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: trunk/uhidd/hidump.c 22 2009-07-24 01:10:34Z kaiw27 $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <err.h>
