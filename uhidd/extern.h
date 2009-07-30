@@ -25,22 +25,20 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $FreeBSD: trunk/uhidd/extern.h 22 2009-07-24 01:10:34Z kaiw27 $
+ * $FreeBSD$
  */
 
 #include <sys/queue.h>
 
+/*
+ * HID parser.
+ */
+
 #define _MAX_RDESC_SIZE	16384
 #define _MAX_REPORT_IDS	256
 #define MAXUSAGE 100
-
-extern int verbose;
-
-enum uhidd_ctype {
-	UHIDD_MOUSE,
-	UHIDD_KEYBOARD,
-	UHIDD_HID
-};
+#define HID_PAGE(u) (((u) >> 16) & 0xffff)
+#define HID_USAGE(u) ((u) & 0xffff)
 
 struct hid_parser {
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
@@ -50,7 +48,6 @@ struct hid_parser {
 };
 
 typedef struct hid_parser *hid_parser_t;
-typedef struct hid_data *hid_data_t;
 
 typedef enum hid_kind {
 	hid_input = 0,
@@ -115,6 +112,47 @@ struct hid_data {
 	unsigned int kindpos[_MAX_REPORT_IDS][3];
 };
 
+typedef struct hid_data *hid_data_t;
+
+/*
+ * Configuration.
+ */
+
+struct hidaction_config {
+	char *usage;
+	int value;
+	int anyvalue;
+	int debounce;
+	int lastseen;
+	int lastused;
+	char *action;
+	STAILQ_ENTRY(hidaction_config) next;
+};
+
+struct device_config {
+	int attach;
+	int vendor_id;
+	int product_id;
+	int interface;
+	STAILQ_HEAD(, hidaction_config) halist;
+	STAILQ_ENTRY(device_config) next;
+};
+
+struct glob_config {
+	int attach_mouse;
+	int attach_kbd;
+	int attach_hid;
+	int detach_kernel_driver;
+	int attach_mouse_as_hid;
+	int attach_kbd_as_hid;
+	STAILQ_HEAD(, hidaction_config) halist;
+	STAILQ_HEAD(, device_config) dclist;
+};
+
+/*
+ * Mouse device.
+ */
+
 #define	BUTTON_MAX	31
 
 struct mouse_dev {
@@ -126,6 +164,10 @@ struct mouse_dev {
 	int btn_cnt;
 	int flags;
 };
+
+/*
+ * Keyboard device.
+ */
 
 #define	MAX_KEYCODE	16
 
@@ -153,12 +195,32 @@ struct kbd_dev {
 	struct kbd_data odata;
 };
 
+/*
+ * HID parent and child data structures.
+ */
+
+enum uhidd_ctype {
+	UHIDD_MOUSE,
+	UHIDD_KEYBOARD,
+	UHIDD_HID
+};
+
+struct hidaction {
+	struct hidaction_config *conf;
+	hid_item_t item;
+	int lastseen;
+	int lastused;
+	STAILQ_ENTRY(hidaction) next;
+};
+
 struct hid_child;
 
 struct hid_parent {
 	const char			*dev;
 	struct libusb20_device		*pdev;
 	struct libusb20_interface	*iface;
+	int				 vendor_id;
+	int				 product_id;
 	int				 ndx;
 	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
@@ -184,11 +246,9 @@ struct hid_child {
 		struct mouse_dev md;
 		struct kbd_dev kd;
 	} u;
+	STAILQ_HEAD(, hidaction) halist;
 	STAILQ_ENTRY(hid_child)	 next;
 };
-
-#define HID_PAGE(u) (((u) >> 16) & 0xffff)
-#define HID_USAGE(u) ((u) & 0xffff)
 
 /*
  * Macros used for debugging/error/information output.
@@ -235,6 +295,12 @@ type_name(enum uhidd_ctype t)
 		printf("%s=> %s", pb, pb2);				\
 	} while (0);
 
+/*
+ * Globals.
+ */
+
+extern int verbose;
+extern struct glob_config gconfig;
 
 /*
  * Prototypes.

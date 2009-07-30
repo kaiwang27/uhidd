@@ -62,13 +62,8 @@ Attach			{ return (T_ATTACH); }
 			}
 
 [0-9]+			{
-				yylval.val = strtoul(yytext, NULL, 10);
+				yylval.val = strtol(yytext, NULL, 10);
 				return (T_NUM);
-			}
-
-[_A-Za-z][_A-Za-z0-9]*	{
-				yylval.str = strdup(yytext);
-				return (T_IDENT);
 			}
 
 \"[^"]+\"		{
@@ -80,6 +75,7 @@ Attach			{ return (T_ATTACH); }
 \:			{ return (':'); }
 \{			{ return ('{'); }
 \}			{ return ('}'); }
+\*			{ return ('*'); }
 [ \t]			/* whitespace */
 \#.*			/* comment */
 "\n"			{ lineno++; }

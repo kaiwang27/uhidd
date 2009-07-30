@@ -35,34 +35,6 @@ __FBSDID("$FreeBSD$");
 
 #include "extern.h"
 
-struct hidaction {
-	int usage;
-	int value;
-	int debounce;
-	char *action;
-	STAILQ_ENTRY(hidaction) next;
-};
-
-struct device_config {
-	int attach;
-	int vendor_id;
-	int product_id;
-	int interface;
-	STAILQ_HEAD(, hidaction) halist;
-	STAILQ_ENTRY(device_config) next;
-};
-
-struct glob_config {
-	int attach_mouse;
-	int attach_kbd;
-	int attach_hid;
-	int detach_kernel_driver;
-	int attach_mouse_as_hid;
-	int attach_kbd_as_hid;
-	STAILQ_HEAD(, hidaction) halist;
-	STAILQ_HEAD(, device_config) dclist;
-};
-
 extern int yylex(void);
 extern int yyparse(void);
 extern int lineno;
@@ -70,7 +42,8 @@ extern FILE *yyin;
 
 const char *config_file = "uhidd.conf";
 struct glob_config gconfig;
-struct device_config dconfig, *dconfig_p;
+
+static struct device_config dconfig, *dconfig_p;
 
 %}
 
@@ -85,14 +58,14 @@ struct device_config dconfig, *dconfig_p;
 %token T_GENERIC
 %token T_ATTACH
 %token <val> T_NUM
-%token <str> T_IDENT
+%token <str> T_USAGE
 %token <str> T_STRING
-%type <ha> hidaction
+%type <hac> hidaction_conf
 
 %union {
 	char *str;
 	int val;
-	struct hidaction *ha;
+	struct hidaction_config *hac;
 }
 
 %%
@@ -127,10 +100,10 @@ generic_conf
 	;
 
 generic_entry_list
-	: hidaction {
+	: hidaction_conf {
 		STAILQ_INSERT_TAIL(&gconfig.halist, $1, next);
 	}
-	| generic_entry_list hidaction {
+	| generic_entry_list hidaction_conf {
 		STAILQ_INSERT_TAIL(&gconfig.halist, $2, next);
 	}
 	;
@@ -167,7 +140,7 @@ device_conf_entry_list
 
 device_conf_entry
 	: attach
-	| hidaction {
+	| hidaction_conf {
 		STAILQ_INSERT_TAIL(&dconfig.halist, $1, next);
 	}
 	;
@@ -235,15 +208,26 @@ attachkeyboardashid
 	}
 	;
 
-hidaction
-	: T_IDENT ":" T_IDENT T_NUM T_NUM T_STRING {
-		$$ = calloc(1, sizeof(struct hidaction));
+hidaction_conf
+	: T_STRING T_NUM T_NUM T_STRING {
+		$$ = calloc(1, sizeof(struct hidaction_config));
 		if ($$ == NULL)
 			err(1, "calloc");
-		$$->usage = 0;	/* FIXME */
-		$$->value = $4;
-		$$->debounce = $5;
-		$$->action = $6;
+		$$->usage = $1;
+		$$->anyvalue = 0;
+		$$->value = $2;
+		$$->debounce = $3;
+		$$->action = $4;
+	}
+	| T_STRING '*' T_NUM T_STRING {
+		$$ = calloc(1, sizeof(struct hidaction_config));
+		if ($$ == NULL)
+			err(1, "calloc");
+		$$->usage = $1;
+		$$->anyvalue = 1;
+		$$->value = 0;
+		$$->debounce = $3;
+		$$->action = $4;
 	}
 	;
 
@@ -255,7 +239,9 @@ yyerror(const char *s)
 {
 
 	(void) s;
-	fprintf(stderr, "Syntax error in config file, line %d\n", lineno);
+	fprintf(stderr, "Syntax error in config file %s, line %d\n",
+	    config_file, lineno);
+	exit(1);
 }
 
 int
