@@ -4,7 +4,7 @@ SRCS=	hidparser.c hidump.c kbd.c main.c mouse.c usage_in_page.c \
 
 NO_MAN=
 
-WARNS?=6
+WARNS?=	6
 
 DPADD=	${LIBUSB} ${LIBPTHREAD}
 LDADD=	-lusb -lpthread

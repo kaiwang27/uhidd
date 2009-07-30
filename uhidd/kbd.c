@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD $");
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "extern.h"
@@ -381,8 +382,7 @@ kbd_write(struct hid_child *hc, int hid_key, int make)
 	assert(hp != NULL);
 
 	if (hid_key >= xsize) {
-		printf("%s: iface(%d) invalid keycode(%d) received",
-		    hp->dev, hp->ndx, hid_key);
+		PRINT2("Invalid keycode(%d) received", hid_key);
 		return;
 	}
 
@@ -497,44 +497,42 @@ kbd_attach(struct hid_child *hc)
 
 	/* Open /dev/vkbdctl. */
 	if ((KBD.vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
-		printf("%s: iface(%d) could not open /dev/vkbdctl: %s\n",
-		    hp->dev, hp->ndx, strerror(errno));
+		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
+		    "/dev/vkbdctl: %s", hp->dev, hp->ndx, hc->ndx,
+		    type_name(hc->type), strerror(errno));
 		return;
 	}
 
-	if (debug) {
+	if (verbose) {
 		if (fstat(KBD.vkbd_fd, &sb) < 0) {
+			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
+			    "/dev/vkbdctl: %s\n", hp->dev, hp->ndx, hc->ndx,
+			    type_name(hc->type), strerror(errno));
+
 			printf("%s: iface(%d) fstat failed: %s\n", hp->dev,
 			    hp->ndx, strerror(errno));
 			return;
 		}
-		printf("%s: iface(%d) kbd device name: %s\n", hp->dev, hp->ndx,
-		    devname(sb.st_rdev, S_IFCHR));
+		PRINT2("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 	}
 
 	/* Find the location of modifiers. (224 is LeftControl)*/
 	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 224), hid_input,
 		&KBD.mods)) {
-		if (debug)
-			printf("%s: iface(%d) modifiers (%d)\n", hp->dev,
-			    hp->ndx, KBD.mods.pos);
+		if (verbose)
+			PRINT2("modifiers at %d\n", KBD.mods.pos);
 		/* We want the 8bit long data start from LeftControl. */
 		KBD.mods.report_size = 8;
 	} else
-		printf("%s: iface(%d) warning: no modifiers\n", hp->dev, hp->ndx);
-
-
-	
+		PRINT2("warning: no modifiers\n");
 
 	/* Find the location of keycode array. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 0), hid_input,
 		&KBD.keys)) {
-		if (debug)
-			printf("%s: iface(%d) keycode array (%d)\n", hp->dev,
-			    hp->ndx, KBD.keys.pos);
+		if (verbose)
+			PRINT2("keycode array (%d)\n", KBD.keys.pos);
 	} else
-		printf("%s: iface(%d) warning: no keycode array\n", hp->dev,
-		    hp->ndx);
+		PRINT2("warning: no keycode array\n");
 
 	KBD.key_cnt = KBD.keys.report_count;
 }
@@ -552,9 +550,8 @@ kbd_recv(struct hid_child *hc, char *buf, int len)
 
 	KBD.ndata.mod = (uint8_t) hid_get_data(buf, &KBD.mods);
 	cnt = hid_get_array8(buf, KBD.ndata.keycode, &KBD.keys);
-	if (debug) {
-		printf("%s: iface(%d) keycode received data: mod(0x%02x)",
-		    hp->dev, hp->ndx, KBD.ndata.mod);
+	if (verbose) {
+		PRINT2("keycode received data: mod(0x%02x)", KBD.ndata.mod);
 		for (i = 0; i < cnt; i++)
 			printf(" %d", KBD.ndata.keycode[i]);
 		putchar('\n');

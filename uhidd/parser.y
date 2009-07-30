@@ -226,7 +226,7 @@ attachmouseashid
 	}
 	;
 
-attachkeyboardhid
+attachkeyboardashid
 	: T_ATTACHKEYBOARDASHID T_YES {
 		gconfig.attach_kbd_as_hid = 1;
 	}
@@ -255,24 +255,29 @@ yyerror(const char *s)
 {
 
 	(void) s;
-	printf("Syntax error in config file, line %d\n", lineno);
+	fprintf(stderr, "Syntax error in config file, line %d\n", lineno);
 }
 
-void
+int
 read_config_file(void)
 {
+	int r;
 
 	STAILQ_INIT(&gconfig.dclist);
 	STAILQ_INIT(&gconfig.halist);
 	STAILQ_INIT(&dconfig.halist);
 
 	if ((yyin = fopen(config_file, "r")) == NULL) {
-		printf("open %s failed: %s", config_file, strerror(errno));
-		return;
+		fprintf(stderr, "open %s failed: %s", config_file,
+		    strerror(errno));
+		return (-1);
 	}
 
+	r = 0;
 	if (yyparse() < 0)
-		printf("could not parse %s\n", config_file);
+		r = -1;
 
 	fclose(yyin);
+
+	return (r);
 }
