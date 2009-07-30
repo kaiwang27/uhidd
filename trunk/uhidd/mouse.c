@@ -50,36 +50,32 @@ mouse_attach(struct hid_child *hc)
 	hp = hc->parent;
 	assert(hp != NULL);
 
-	/* Open /dev/consolectl if need. */
 	hc->u.md.cons_fd = open("/dev/consolectl", O_RDWR);
 	if (hc->u.md.cons_fd < 0) {
-		printf("%s: iface(%d) could not open /dev/consolectl:"
-		    " %s", hp->dev, hp->ndx, strerror(errno));
+		PRINT2("could not open /dev/consolectl: %s", strerror(errno));
 		return;
 	}
 
 	/* Find X Axis. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_X), hid_input,
 	    &hc->u.md.x)) {
-		if (debug)
-			printf("%s: iface(%d) has X AXIS(%d)\n", hp->dev,
-			    hp->ndx, hc->u.md.x.pos);
+		if (verbose)
+			PRINT2("has X AXIS(%d)\n", hc->u.md.x.pos);
 	}
 
 	/* Find Y Axis. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Y), hid_input,
 	    &hc->u.md.y)) {
-		if (debug)
-			printf("%s: iface(%d) has Y AXIS(%d)\n", hp->dev,
-			    hp->ndx, hc->u.md.y.pos);
+		if (verbose)
+			PRINT2("has Y AXIS(%d)\n", hc->u.md.y.pos);
 	}
 
 	/* HUG_WHEEL is the most common place for mouse wheel. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_WHEEL),
 	    hid_input, &hc->u.md.wheel)) {
-		if (debug)
-			printf("%s: iface(%d) wheel found (HUG_WHEEL(%d))\n",
-			    hp->dev, hp->ndx, hc->u.md.wheel.pos);
+		if (verbose)
+			PRINT2("wheel found (HUG_WHEEL(%d))\n",
+			    hc->u.md.wheel.pos);
 		goto next;
 	}
 
@@ -93,18 +89,17 @@ mouse_attach(struct hid_child *hc)
 	 */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_TWHEEL),
 	    hid_input, &hc->u.md.wheel)) {
-		if (debug)
-			printf("%s: iface(%d) wheel found (HUG_TWHEEL(%d))\n",
-			    hp->dev, hp->ndx, hc->u.md.wheel.pos);
+		if (verbose)
+			PRINT2("wheel found (HUG_TWHEEL(%d))\n",
+			    hc->u.md.wheel.pos);
 		goto next;
 	}
 
 	/* Try if the mouse is using HUG_Z to report its wheel. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Z),
 		hid_input, &hc->u.md.wheel)) {
-		if (debug)
-			printf("%s: iface(%d) wheel found (HUG_Z(%d))\n",
-			    hp->dev, hp->ndx, hc->u.md.wheel.pos);
+		if (verbose)
+			PRINT2("wheel found (HUG_Z(%d))\n", hc->u.md.wheel.pos);
 	}
 
 	/* Otherwise we have no wheel. */
@@ -116,9 +111,8 @@ next:
 			break;
 	}
 	hc->u.md.btn_cnt = i;
-	if (debug)
-		printf("%s: iface(%d) %d buttons\n", hp->dev, hp->ndx,
-		    hc->u.md.btn_cnt);
+	if (verbose)
+		PRINT2("%d buttons\n", hc->u.md.btn_cnt);
 }
 
 void
@@ -148,9 +142,9 @@ mouse_recv(struct hid_child *hc, char *buf, int len)
 			btn |= (1 << b);
 	}
 
-	if (debug)
-		printf("%s: iface(%d) mouse received data: dx(%d) dy(%d) "
-		    "dw(%d) btn(%#x)\n", hp->dev, hp->ndx, dx, dy, dw, btn);
+	if (verbose)
+		PRINT2("mouse received data: dx(%d) dy(%d) dw(%d) btn(%#x)\n",
+		    dx, dy, dw, btn);
 
 	mi.operation = MOUSE_ACTION;
 	mi.u.data.x = dx;
@@ -159,6 +153,6 @@ mouse_recv(struct hid_child *hc, char *buf, int len)
 	mi.u.data.buttons = btn;
 
 	if (ioctl(hc->u.md.cons_fd, CONS_MOUSECTL, &mi) < 0)
-		printf("%s: iface(%d) could not submit mouse data: ioctl: %s\n",
-		    hp->dev, hp->ndx, strerror(errno));
+		PRINT2("could not submit mouse data: ioctl failed: %s\n",
+		    strerror(errno));
 }

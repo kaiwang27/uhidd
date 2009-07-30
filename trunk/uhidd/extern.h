@@ -30,11 +30,11 @@
 
 #include <sys/queue.h>
 
-#define	_MAX_RDESC_SIZE	16384
-#define	_MAX_REPORT_IDS	256
+#define _MAX_RDESC_SIZE	16384
+#define _MAX_REPORT_IDS	256
 #define MAXUSAGE 100
 
-extern int debug;
+extern int verbose;
 
 enum uhidd_ctype {
 	UHIDD_MOUSE,
@@ -164,6 +164,7 @@ struct hid_parent {
 	int				 rsz;
 	uint8_t				 ep;
 	int				 pkt_sz;
+	int				 child_cnt;
 	pthread_t			 thread;
 	STAILQ_HEAD(, hid_child)	 hclist;
 	STAILQ_ENTRY(hid_parent)	 next;
@@ -172,6 +173,7 @@ struct hid_parent {
 struct hid_child {
 	struct hid_parent	*parent;
 	enum uhidd_ctype	 type;
+	int			 ndx;
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
@@ -187,6 +189,56 @@ struct hid_child {
 
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
+
+/*
+ * Macros used for debugging/error/information output.
+ */
+
+#define PRINT0(d, n, ...)						\
+	do {								\
+		char pb[64], pb2[1024];					\
+									\
+		snprintf(pb, sizeof(pb), "%s[iface:%d]", d, n);		\
+		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
+		printf("%s=> %s", pb, pb2);				\
+	} while (0);
+
+#define PRINT1(...)							\
+	do {								\
+		char pb[64], pb2[1024];					\
+									\
+		snprintf(pb, sizeof(pb), "%s[iface:%d]", hp->dev,	\
+		    hp->ndx);						\
+		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
+		printf("%s=> %s", pb, pb2);				\
+	} while (0);
+
+static inline const char *
+type_name(enum uhidd_ctype t)
+{
+
+	switch (t) {
+	case UHIDD_MOUSE: return "mouse";
+	case UHIDD_KEYBOARD: return "kbd";
+	case UHIDD_HID: return "hid";
+	default: return "unknown";
+	}
+}
+
+#define PRINT2(...)							\
+	do {								\
+		char pb[64], pb2[1024];					\
+									\
+		snprintf(pb, sizeof(pb), "%s[iface:%d][c%d:%s]",	\
+		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));	\
+		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
+		printf("%s=> %s", pb, pb2);				\
+	} while (0);
+
+
+/*
+ * Prototypes.
+ */
 
 void		dump_report_desc(unsigned char *, int);
 hid_parser_t	hid_parser_alloc(unsigned char *, int);
@@ -206,6 +258,6 @@ void		kbd_attach(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);
 void		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
-void		read_config_file(void);
+int		read_config_file(void);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);

@@ -42,20 +42,22 @@ __FBSDID("$FreeBSD $");
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "extern.h"
 
-int debug = 0;
-int detach = 0;
-STAILQ_HEAD(, hid_parent) hplist;
+int verbose = 0;
+
+static int detach = 1;
+static STAILQ_HEAD(, hid_parent) hplist;
 
 static void	usage(void);
 static void	find_and_attach(struct libusb20_backend *backend,
-    const char *dev);
+		    const char *dev);
 static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
-    struct libusb20_interface *iface, int i);
+		    struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
 static void	attach_hid_child(struct hid_child *hc);
 static void	child_recv(struct hid_child *hc, char *buf, int len);
@@ -70,13 +72,20 @@ main(int argc, char **argv)
 	struct libusb20_backend *backend;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "dk")) != -1) {
+	/*
+	 * Read config file before processing cmd line args.
+	 */
+	if (read_config_file() < 0)
+		errx(1, "read_config_file failed");
+
+	while ((opt = getopt(argc, argv, "dv")) != -1) {
 		switch(opt) {
 		case 'd':
-			debug++;
+			detach = 0;
 			break;
-		case 'k':
-			detach++;
+		case 'v':
+			verbose++;
+			detach = 0;
 			break;
 		default:
 			usage();
@@ -89,11 +98,18 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
-	read_config_file();
+	if (detach) {
+		if (daemon(0, 0) < 0)
+			err(1, "daemon");
+	}
+
+	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
 
 	backend = libusb20_be_alloc_default();
-	if (backend == NULL)
-		errx(1, "can not alloc backend");
+	if (backend == NULL) {
+		syslog(LOG_ERR, "can not alloc backend");
+		exit(1);
+	}
 
 	STAILQ_INIT(&hplist);
 	find_and_attach(backend, *argv);
@@ -106,7 +122,8 @@ main(int argc, char **argv)
 	STAILQ_FOREACH(hp, &hplist, next)
 		pthread_join(hp->thread, NULL);
 
-	printf("main terminated\n");
+	syslog(LOG_NOTICE, "terminated\n");
+
 	exit(0);
 }
 
@@ -116,14 +133,18 @@ find_and_attach(struct libusb20_backend *backend, const char *dev)
 	struct libusb20_device *pdev;
 	unsigned int bus, addr;
 
-	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2)
-		errx(1, "%s not found", dev);
+	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+		syslog(LOG_ERR, "%s not found", dev);
+		exit(1);
+	}
 
 	pdev = NULL;
 	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
 		if (bus == libusb20_dev_get_bus_number(pdev) &&
-		    addr == libusb20_dev_get_address(pdev))
+		    addr == libusb20_dev_get_address(pdev)) {
 			attach_dev(dev, pdev);
+			break;
+		}
 	}
 }
 
@@ -136,23 +157,28 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 
 	e = libusb20_dev_open(pdev, 32);
 	if (e != 0) {
-		printf("%s: libusb20_dev_open failed\n", dev);
+		syslog(LOG_ERR, "libusb20_dev_open %s failed", dev);
 		return;
 	}
 		
-	/* Get current configuration. */
+	/*
+	 * Use current configuration.
+	 */
 	cndx = libusb20_dev_get_config_index(pdev);
 	config = libusb20_dev_alloc_config(pdev, cndx);
 	if (config == NULL) {
-		printf("%s: can not alloc config", dev);
+		syslog(LOG_ERR, "Can not alloc config for %s", dev);
 		return;
 	}
 
-	/* Iterate each interface. */
+	/*
+	 * Iterate each interface.
+	 */
 	for (i = 0; i < config->num_interface; i++) {
 		iface = &config->interface[i];
 		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
-			printf("%s: has HID interface %d\n", dev, i);
+			if (verbose)
+				PRINT0(dev, i, "HID interface\n");
 			attach_iface(dev, pdev, iface, i);
 		}
 	}
@@ -171,6 +197,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
 
+
 #if 0
 	/* XXX ioctl currently unimplemented */
 	if (libusb20_dev_kernel_driver_active(pdev, ndx)) {
@@ -180,7 +207,10 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		printf("%s: iface(%d) kernel driver is not active\n", dev, ndx);
 #endif
 
-	/* Get report descriptor. */
+	/*
+	 * Get report descriptor.
+	 */
+
 	pos = 0;
 	size = iface->extra.len;
 	while (size > 2) {
@@ -201,7 +231,8 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	if (j >= libusb20_me_get_1(&iface->extra, pos + 5))
 		return;
 	ds = libusb20_me_get_2(&iface->extra, desc + 1);
-	printf("%s: iface(%d) report size = %d\n", dev, ndx, ds);
+	if (verbose)
+		PRINT0(dev, ndx, "Report descriptor size = %d\n", ds);
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_IN |
 	    LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
@@ -209,12 +240,16 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	req.wValue = LIBUSB20_DT_REPORT << 8;
 	req.wIndex = ndx;
 	req.wLength = ds;
-	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
+	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 1000, 0);
 	if (e) {
-		printf("%s: iface(%d) libusb20_dev_request_sync failed\n",
-		    dev, ndx);
+		syslog(LOG_ERR, "%s[iface:%d]=> libusb20_dev_request_sync"
+		    " failed", dev, ndx);
 		return;
 	}
+
+	/*
+	 * Allocate a hid parent device.
+	 */
 
 	hp = calloc(1, sizeof(*hp));
 	if (hp == NULL)
@@ -227,7 +262,10 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	hp->rsz = actlen;
 	STAILQ_INIT(&hp->hclist);
 
-	/* Find the IN interrupt endpoint. */
+	/*
+	 * Find the input interrupt endpoint.
+	 */
+
 	for (j = 0; j < iface->num_endpoints; j++) {
 		ep = &iface->endpoints[j];
 		if ((ep->desc.bmAttributes & LIBUSB20_TRANSFER_TYPE_MASK) ==
@@ -236,17 +274,15 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		    LIBUSB20_ENDPOINT_IN)) {
 			hp->ep = ep->desc.bEndpointAddress;
 			hp->pkt_sz = ep->desc.wMaxPacketSize;
-			if (debug) {
-				printf("%s: iface(%d) find IN interrupt ep:"
-				    " %#x", dev, ndx, hp->ep);
+			if (verbose) {
+				PRINT1("Find IN interrupt ep: %#x", hp->ep);
 				printf(" packet_size=%#x\n", hp->pkt_sz);
 			}
 			break;
 		}
 	}
 	if (hp->ep == 0) {
-		printf("%s: iface(%d) does not have IN interrupt ep\n", dev,
-		    ndx);
+		PRINT1("does not have IN interrupt ep\n");
 		free(hp);
 		return;
 	}
@@ -305,6 +341,7 @@ repair_report_desc(struct hid_child *hc)
 
 		/* Check if it is USAGE item. */
 		if (bType == 2 && bTag == 0) {
+
 			/*
 			 * We need to insert USAGE PAGE before this
 			 * USAGE. USAGE PAGE needs 3-byte space.
@@ -319,7 +356,7 @@ repair_report_desc(struct hid_child *hc)
 			if (bytes == 3)
 				pos[2] = (env._usage_page & 0xff00) >> 8;
 			hc->rsz += bytes;
-			if (debug > 1) {
+			if (verbose > 1) {
 				printf("\tnr=%d repair: insert USAGE PAGE",
 				    hc->nr);
 				for (i = 0; i < bytes; i++)
@@ -380,7 +417,7 @@ repair_report_desc(struct hid_child *hc)
 				pos[4] = env.report_count >> 24;
 			}
 			hc->rsz += bytes;
-			if (debug > 1) {
+			if (verbose > 1) {
 				printf("\tnr=%d repair: insert REPORT COUNT",
 				    hc->nr);
 				for (i = 0; i < bytes; i++)
@@ -407,8 +444,8 @@ attach_hid_parent(struct hid_parent *hp)
 	p = hid_parser_alloc(hp->rdesc, hp->rsz);
 	nr = hid_get_report_id_num(p);
 	hid_get_report_ids(p, rid, nr);
-	if (debug) {
-		printf("%s: iface(%d) nr=%d ", hp->dev, hp->ndx, nr);
+	if (verbose) {
+		PRINT1("#id=%d ", nr);
 		printf("rid=(");
 		for (i = 0; i < nr; i++) {
 			printf("%d", rid[i]);
@@ -417,7 +454,7 @@ attach_hid_parent(struct hid_parent *hp)
 		}
 		printf(")\n");
 	}
-	if (debug > 1) {
+	if (verbose > 1) {
 		if (nr == 0)
 			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
 			    0,
@@ -450,23 +487,24 @@ attach_hid_parent(struct hid_parent *hp)
 			lend = end;
 			hc->rsz = end - start;
 			if (hc->rsz <= 0 || hc->rsz > _MAX_RDESC_SIZE)
-				errx(1, "%s: iface(%d) invalid hid child"
-				    " report desc range [%d-%d]", hp->dev,
+				syslog(LOG_ERR, "%s[iface:%d]=> invalid hid "
+				    "child report desc range [%d-%d]", hp->dev,
 				    hp->ndx, start, end);
 			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
+			hc->ndx = hp->child_cnt;
+			hp->child_cnt++;
 			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
-			printf("%s: iface(%d) [%d-%d] ", hp->dev, hp->ndx,
-			    start, end);
+			PRINT1("[%d-%d] ", start, end);
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
-				printf("mouse found\n");
+				printf("*MOUSE FOUND*\n");
 				hc->type = UHIDD_MOUSE;
 			} else if (ch.usage ==
 			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
-				printf("keyboard found\n");
+				printf("*KEYBOARD FOUND*\n");
 				hc->type = UHIDD_KEYBOARD;
 			} else {
-				printf("general hid device found\n");
+				printf("*GENERAL HID DEVICE FOUND*\n");
 				hc->type = UHIDD_HID;
 			}
 
@@ -496,8 +534,8 @@ attach_hid_child(struct hid_child *hc)
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
-	if (debug > 1) {
-		printf("\tnr=%d ", hc->nr);
+	if (verbose > 2) {
+		printf("\t#id=%d ", hc->nr);
 		printf("rid=(");
 		for (i = 0; i < hc->nr; i++) {
 			printf("%d", hc->rid[i]);
@@ -518,7 +556,7 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_input, hc->rid[i]),
 			    hid_report_size(p, hid_output, hc->rid[i]),
 			    hid_report_size(p, hid_feature, hc->rid[i]));
-		if (debug > 2)
+		if (verbose > 2)
 			dump_report_desc(hc->rdesc, hc->rsz);
 	}
 	hc->p = p;
@@ -555,11 +593,13 @@ start_hid_parent(void *arg)
 	hp = arg;
 	assert(hp != NULL);
 
-	if (debug)
-		printf("%s: iface(%d) hid parent started\n", hp->dev, hp->ndx);
+	if (verbose)
+		PRINT1("HID parent started\n");
 
-	if (sscanf(hp->dev, "/dev/ugen%u.%u", &bus, &addr) < 2)
-		errx(1, "%s not found", hp->dev);
+	if (sscanf(hp->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+		syslog(LOG_ERR, "%s not found", hp->dev);
+		return (NULL);
+	}
 
 	backend = libusb20_be_alloc_default();
 	pdev = NULL;
@@ -568,32 +608,34 @@ start_hid_parent(void *arg)
 		    addr == libusb20_dev_get_address(pdev)) {
 			e = libusb20_dev_open(pdev, 32);
 			if (e != 0) {
-				printf("%s: libusb20_dev_open failed\n",
+				syslog(LOG_ERR,
+				    "%s: libusb20_dev_open failed\n",
 				    hp->dev);
 				return (NULL);
 			}
 			break;
 		}
 	}
-	if (pdev == NULL)
-		errx(1, "%s not found", hp->dev);
+	if (pdev == NULL) {
+		syslog(LOG_ERR, "%s not found", hp->dev);
+		return (NULL);
+	}
 	hp->pdev = pdev;
 
 	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	x |= 1;
 	xfer = libusb20_tr_get_pointer(hp->pdev, x);
 	if (xfer == NULL) {
-		printf("%s: iface(%d) libusb20_tr_get_pointer failed\n",
+		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_get_pointer failed\n",
 		    hp->dev, hp->ndx);
 		goto parent_end;
 	}
 		
 	e = libusb20_tr_open(xfer, 4096, 1, hp->ep);
 	if (e == LIBUSB20_ERROR_BUSY) {
-		printf("%s: iface(%d) xfer already opened\n", hp->dev,
-		    hp->ndx);
+		PRINT1("xfer already opened\n");
 	} else if (e) {
-		printf("%s: iface(%d) libusb20_tr_open failed\n",
+		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_open failed\n",
 		    hp->dev, hp->ndx);
 		goto parent_end;
 	}
@@ -601,7 +643,7 @@ start_hid_parent(void *arg)
 	for (;;) {
 
 		if (libusb20_tr_pending(xfer)) {
-			printf("%s: iface(%d) tr pending\n", hp->dev, hp->ndx);
+			PRINT1("%s: iface(%d) tr pending\n", hp->dev, hp->ndx);
 			continue;
 		}
 		
@@ -611,8 +653,7 @@ start_hid_parent(void *arg)
 
 		for (;;) {
 			if (libusb20_dev_process(hp->pdev) != 0) {
-				printf("%s: iface(%d) device detached?\n",
-				    hp->dev, hp->ndx);
+				PRINT1(" device detached?\n");
 				goto parent_end;
 			}
 			if (libusb20_tr_pending(xfer) == 0)
@@ -623,9 +664,8 @@ start_hid_parent(void *arg)
 		switch (libusb20_tr_get_status(xfer)) {
 		case 0:
 			actlen = libusb20_tr_get_actual_length(xfer);
-			if (debug > 1) {
-				printf("%s: iface(%d) received data(%u): ",
-				    hp->dev, hp->ndx, actlen);
+			if (verbose > 2) {
+				PRINT1("received data(%u): ", actlen);
 				for (i = 0; (uint32_t)i < actlen; i++)
 					printf("%02d ", buf[i]);
 				putchar('\n');
@@ -633,22 +673,20 @@ start_hid_parent(void *arg)
 			dispatch(hp, buf, actlen);
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
-			if (debug)
-				printf("%s: iface(%d) TIMED OUT\n", hp->dev,
-				    hp->ndx);
+			if (verbose)
+				PRINT1("TIMED OUT\n");
 			break;
 		default:
-			if (debug)
-				printf("%s: iface(%d) transfer error\n",
-				    hp->dev, hp->ndx);
+			if (verbose)
+				PRINT1("transfer error\n");
 			break;
 		}
 	}
 
 parent_end:
 
-	if (debug)
-		printf("%s: iface(%d) hid parent exit\n", hp->dev, hp->ndx);
+	if (verbose)
+		PRINT1("HID parent exit\n");
 
 	return (NULL);
 }
@@ -660,8 +698,7 @@ dispatch(struct hid_parent *hp, char *buf, int len)
 	int i;
 
 	if (STAILQ_EMPTY(&hp->hclist)) {
-		printf("%s: iface(%d) no hid child device exist, "
-		    "packet discarded.", hp->dev, hp->ndx);
+		PRINT1("no hid child device exist, packet discarded.");
 		return;
 	}
 
@@ -687,10 +724,9 @@ dispatch(struct hid_parent *hp, char *buf, int len)
 	 * broken. Just send the packet to the first child.
 	 */
 	if (hc == NULL) {
-		if (debug)
-			printf("%s: iface(%d) packet doesn't belong to any"
-			    " hid child, packet sent to the first child.",
-			    hp->dev, hp->ndx);
+		if (verbose)
+			PRINT1("packet doesn't belong to any hid child, "
+			    "packet sent to the first child.");
 		hc = STAILQ_FIRST(&hp->hclist);
 		child_recv(hc, buf, len);
 	}
