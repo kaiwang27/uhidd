@@ -240,7 +240,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	req.wValue = LIBUSB20_DT_REPORT << 8;
 	req.wIndex = ndx;
 	req.wLength = ds;
-	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 1000, 0);
+	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
 	if (e) {
 		syslog(LOG_ERR, "%s[iface:%d]=> libusb20_dev_request_sync"
 		    " failed", dev, ndx);
@@ -643,7 +643,7 @@ start_hid_parent(void *arg)
 	for (;;) {
 
 		if (libusb20_tr_pending(xfer)) {
-			PRINT1("%s: iface(%d) tr pending\n", hp->dev, hp->ndx);
+			PRINT1("tr pending\n");
 			continue;
 		}
 		
