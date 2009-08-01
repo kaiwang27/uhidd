@@ -381,8 +381,10 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 	switch (cmd) {
 	case USB_GET_REPORT_DESC:
 		UVHID_LOCK(sc);
+		printf("USB_GET_REPORT_DESC ioctl\n");
 		ugd = (struct usb_gen_descriptor *)data;
 		ugd->ugd_actlen = min(sc->us_rsz, ugd->ugd_maxlen);
+		printf("ugd->actlen=%d\n", ugd->ugd_actlen);
 		if (ugd->ugd_data == NULL || ugd->ugd_actlen == 0) {
 			UVHID_UNLOCK(sc);
 			break;
