@@ -35,10 +35,12 @@ __FBSDID("$FreeBSD: trunk/uvhid/uvhid.c 36 2009-07-29 02:59:57Z kaiw27 $");
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/malloc.h>
+#include <sys/poll.h>
 #include <sys/systm.h>
 #include <sys/taskqueue.h>
 #include <sys/uio.h>
 #include <sys/queue.h>
+#include <sys/selinfo.h>
 #include <dev/usb/usb_ioctl.h>
 #include "uvhid_var.h"
 
@@ -68,8 +70,11 @@ struct rqueue {
 struct uvhid_softc {
 	struct rqueue	us_rq;
 	struct rqueue	us_wq;
+	struct selinfo	us_rsel;
+	struct selinfo	us_wsel;
 	struct mtx	us_mtx;
 	struct cv	us_cv;
+	
 	int		us_hcflags;
 	int		us_hflags;
 
@@ -91,12 +96,15 @@ static struct clonedevs	*hidctl_clones = NULL;
 static struct clonedevs	*hid_clones = NULL;
 
 static void	hidctl_clone(void *arg, struct ucred *cred, char *name,
-    int namelen, struct cdev **dev);
+		    int namelen, struct cdev **dev);
 static void	hidctl_init(struct cdev *hidctl_dev, struct cdev *hid_dev);
 static int	gen_read(struct uvhid_softc *sc, int *scflag,
-    struct rqueue *rq, struct uio *uio, int flag);
+		    struct rqueue *rq, struct uio *uio, int flag);
 static int	gen_write(struct uvhid_softc *sc, int *scflag,
-    struct rqueue *rq, struct uio *uio, int flag);
+		    struct rqueue *rq, struct selinfo *sel, struct uio *uio,
+		    int flag);
+static int	gen_poll(struct uvhid_softc *sc, struct rqueue *rq,
+		    struct selinfo *sel, int events, struct thread *td);
 static void	rq_reset(struct rqueue *rq);
 static void	rq_dequeue(struct rqueue *rq, char *dst, int *size);
 static void	rq_enqueue(struct rqueue *rq, char *src, int size);
@@ -258,7 +266,8 @@ hidctl_write(struct cdev *dev, struct uio *uio, int flag)
 {
 	struct uvhid_softc *sc = dev->si_drv1;
 
-	return (gen_write(sc, &sc->us_hcflags, &sc->us_rq, uio, flag));
+	return (gen_write(sc, &sc->us_hcflags, &sc->us_rq, &sc->us_rsel, uio,
+	    flag));
 }
 
 static int
@@ -303,8 +312,9 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 static int
 hidctl_poll(struct cdev *dev, int events, struct thread *td)
 {
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	return (0);
+	return (gen_poll(sc, &sc->us_wq, &sc->us_wsel, events, td));
 }
 
 static int
@@ -350,7 +360,8 @@ hid_write(struct cdev *dev, struct uio *uio, int flag)
 {
 	struct uvhid_softc *sc = dev->si_drv1;
 
-	return (gen_write(sc, &sc->us_hflags, &sc->us_wq, uio, flag));
+	return (gen_write(sc, &sc->us_hflags, &sc->us_wq, &sc->us_wsel, uio,
+	    flag));
 }
 
 static int
@@ -396,8 +407,9 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 static int
 hid_poll(struct cdev *dev, int events, struct thread *td)
 {
+	struct uvhid_softc *sc = dev->si_drv1;
 
-	return (0);
+	return (gen_poll(sc, &sc->us_rq, &sc->us_rsel, events, td));
 }
 
 static int
@@ -444,7 +456,7 @@ read_done:
 
 static int
 gen_write(struct uvhid_softc *sc, int *scflag, struct rqueue *rq,
-    struct uio *uio, int flag)
+    struct selinfo *sel, struct uio *uio, int flag)
 {
 	unsigned char buf[UVHID_MAX_REPORT_SIZE];
 	int err, len;
@@ -464,6 +476,7 @@ gen_write(struct uvhid_softc *sc, int *scflag, struct rqueue *rq,
 	if (err != 0)
 		goto write_done;
 	rq_enqueue(rq, buf, len);
+	selwakeuppri(sel, PZERO + 1);
 	wakeup(&rq->cc);
 
 write_done:
@@ -471,6 +484,34 @@ write_done:
 	UVHID_UNLOCK(sc);
 
 	return (err);
+}
+
+static int
+gen_poll(struct uvhid_softc *sc, struct rqueue *rq, struct selinfo *sel,
+    int events, struct thread *td)
+{
+	int revents;
+
+	revents = 0;
+
+	UVHID_LOCK(sc);
+
+	if (events & (POLLIN | POLLRDNORM)) {
+		if (rq->cc > 0)
+			revents |= events & (POLLIN | POLLRDNORM);
+		else
+			selrecord(td, sel);
+	}
+
+	/*
+	 * Write is always non-blocking.
+	 */
+	if (events & (POLLOUT | POLLWRNORM))
+		revents |= events & (POLLOUT | POLLWRNORM);
+
+	UVHID_UNLOCK(sc);
+
+	return (revents);
 }
 
 static void
