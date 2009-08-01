@@ -302,7 +302,7 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 		break;
 
 	case USB_SET_REPORT_ID:
-		prntf("set report id = %d\n",  *(int *)data);
+		printf("set report id = %d\n",  *(int *)data);
 		UVHID_LOCK(sc);
 		sc->us_rid = *(int *)data;
 		UVHID_UNLOCK(sc);
