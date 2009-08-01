@@ -25,7 +25,7 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+__FBSDID("$FreeBSD: trunk/uvhid/uvhid.c 36 2009-07-29 02:59:57Z kaiw27 $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -39,6 +39,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/taskqueue.h>
 #include <sys/uio.h>
 #include <sys/queue.h>
+#include <dev/usb/usb_ioctl.h>
+#include "uvhid_var.h"
 
 #define	UVHID_NAME	"uvhid"
 #define	UVHIDCTL_NAME	"uvhidctl"
@@ -57,8 +59,8 @@ MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
 	msleep(&(s)->f, &(s)->us_mtx, PCATCH | (PZERO + 1), d, t)
 
 struct rqueue {
-	int		 cc;
-	unsigned char	 q[UVHID_QUEUE_SIZE];
+	int		cc;
+	unsigned char	q[UVHID_QUEUE_SIZE];
 	unsigned char	*head;
 	unsigned char	*tail;
 };
@@ -74,6 +76,10 @@ struct uvhid_softc {
 #define	OPEN	(1 << 0)	/* device is open */
 #define	READ	(1 << 1)	/* read pending */
 #define	WRITE	(1 << 2)	/* write pending */
+
+	unsigned char	*us_rdesc;
+	int		us_rsz;
+	int		us_rid;
 
 	STAILQ_ENTRY(uvhid_softc) us_next;
 };
@@ -146,7 +152,9 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 	else if (dev_stdclone(name, NULL, UVHIDCTL_NAME, &unit) != 1)
 		return;
 
-	/* Create hidctl device node. */
+	/*
+	 * Create hidctl device node.
+	 */
 	if (clone_create(&hidctl_clones, &hidctl_cdevsw, &unit, dev, 0)) {
 		*dev = make_dev(&hidctl_cdevsw, unit, UID_ROOT, GID_WHEEL,
 		    0600, UVHIDCTL_NAME "%d", unit);
@@ -156,7 +164,9 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 		}
 	}
 
-	/* Create hid device node. */
+	/*
+	 * Create hid device node.
+	 */
 	hid_dev = NULL;
 	if (clone_create(&hid_clones, &hid_cdevsw, &unit, dev, 0)) {
 		hid_dev = make_dev(&hid_cdevsw, unit, UID_ROOT, GID_WHEEL,
@@ -255,8 +265,39 @@ static int
 hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
     struct thread *td)
 {
+	struct uvhid_softc *sc = dev->si_drv1;
+	struct usb_gen_descriptor *ugd;
+	int err;
 
-	return (0);
+	err = 0;
+
+	switch (cmd) {
+	case USB_SET_REPORT_DESC:
+		UVHID_LOCK(sc);
+		ugd = (struct usb_gen_descriptor *)data;
+		if (ugd->ugd_actlen == 0)
+			break;
+		if (sc->us_rdesc)
+			free(sc->us_rdesc, M_UVHID);
+		sc->us_rdesc = malloc(ugd->ugd_actlen, M_UVHID,
+		    M_WAITOK|M_ZERO);
+		sc->us_rsz = ugd->ugd_actlen;
+		err = copyin(ugd->ugd_data, sc->us_rdesc, ugd->ugd_actlen);
+		UVHID_UNLOCK(sc);
+		break;
+
+	case USB_SET_REPORT_ID:
+		UVHID_LOCK(sc);
+		sc->us_rid = *(int *)data;
+		UVHID_UNLOCK(sc);
+		break;
+
+	default:
+		err = ENOIOCTL;
+		break;
+	}
+
+	return (err);
 }
 
 static int
@@ -316,8 +357,40 @@ static int
 hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
     struct thread *td)
 {
+	struct uvhid_softc *sc = dev->si_drv1;
+	struct usb_gen_descriptor *ugd;
+	int err;
 
-	return (0);
+	err = 0;
+
+	switch (cmd) {
+	case USB_GET_REPORT_DESC:
+		UVHID_LOCK(sc);
+		ugd = (struct usb_gen_descriptor *)data;
+		ugd->ugd_actlen = min(sc->us_rsz, ugd->ugd_maxlen);
+		if (ugd->ugd_data == NULL)
+			break;
+		err = copyout(sc->us_rdesc, ugd->ugd_data, ugd->ugd_actlen);
+		UVHID_UNLOCK(sc);
+		break;
+
+	case USB_SET_IMMED:
+	case USB_GET_REPORT:
+	case USB_SET_REPORT:
+		err = ENODEV;	/* not supported. */
+			
+	case USB_GET_REPORT_ID:
+		UVHID_LOCK(sc);
+		*(int *)data = sc->us_rid;
+		UVHID_UNLOCK(sc);
+		break;
+
+	default:
+		err = ENOIOCTL;
+		break;
+	}
+
+	return (err);
 }
 
 static int
@@ -465,7 +538,9 @@ rq_enqueue(struct rqueue *rq, char *src, int size)
 	if (size > UVHID_MAX_REPORT_SIZE || size <= 0)
 		return;
 
-	/* Discard the oldest reports if not enough room left. */
+	/*
+	 * Discard the oldest reports if not enough room left.
+	 */
 	len = size + 1;
 	while (len > UVHID_QUEUE_SIZE - rq->cc)
 		rq_dequeue(rq, NULL, NULL);
