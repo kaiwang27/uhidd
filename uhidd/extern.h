@@ -307,6 +307,7 @@ extern struct glob_config gconfig;
  */
 
 void		dump_report_desc(unsigned char *, int);
+void		hexdump(unsigned char *, int);
 hid_parser_t	hid_parser_alloc(unsigned char *, int);
 void		hid_parser_free(hid_parser_t);
 int		hid_get_report_id_num(hid_parser_t);

@@ -62,6 +62,21 @@ static int upage;
 } while (0)
 
 void
+hexdump(unsigned char *rdesc, int size)
+{
+	unsigned char *p;
+	int i;
+
+	printf("[hexdump]");
+	for (i = 0, p = rdesc; p - rdesc < size; p++, i++) {
+		if (i % 16 == 0)
+			printf("\n%04X", i);
+		printf(" %02hhX", *p);
+	}
+	printf("\n");
+}
+
+void
 dump_report_desc(unsigned char *rdesc, int size)
 {
 	unsigned char *p, *data;
