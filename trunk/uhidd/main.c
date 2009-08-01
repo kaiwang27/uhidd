@@ -597,8 +597,10 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_input, hc->rid[i]),
 			    hid_report_size(p, hid_output, hc->rid[i]),
 			    hid_report_size(p, hid_feature, hc->rid[i]));
-		if (verbose > 2)
+		if (verbose > 2) {
 			dump_report_desc(hc->rdesc, hc->rsz);
+			hexdump(hc->rdesc, hc->rsz);
+		}
 	}
 	hc->p = p;
 
@@ -693,7 +695,7 @@ match_hidaction(struct hid_child *hc, struct hidaction_config *hac)
 				snprintf(ub, sizeof(ub), "%s:%s",
 				    usage_page(HID_PAGE(u)),
 				    usage_in_page(HID_PAGE(u), HID_USAGE(u)));
-				if (verbose > 2)
+				if (verbose > 3)
 					printf("usage %s\n", ub);
 				if (!strcasecmp(ub, hac->usage))
 					goto foundhid;
@@ -702,7 +704,7 @@ match_hidaction(struct hid_child *hc, struct hidaction_config *hac)
 					    coll + 1, usage_page(HID_PAGE(u)),
 					    usage_in_page(HID_PAGE(u),
 					    HID_USAGE(u)));
-					if (verbose > 2)
+					if (verbose > 3)
 						printf("usage %s\n", ub);
 					if (!strcasecmp(ub, hac->usage))
 						goto foundhid;
