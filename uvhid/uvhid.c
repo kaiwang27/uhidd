@@ -285,8 +285,10 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 	case USB_SET_REPORT_DESC:
 		UVHID_LOCK(sc);
 		ugd = (struct usb_gen_descriptor *)data;
-		if (ugd->ugd_actlen == 0)
+		if (ugd->ugd_actlen == 0) {
+			UVHID_UNLOCK(sc);
 			break;
+		}
 		if (sc->us_rdesc)
 			free(sc->us_rdesc, M_UVHID);
 		sc->us_rdesc = malloc(ugd->ugd_actlen, M_UVHID,
@@ -381,8 +383,10 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 		UVHID_LOCK(sc);
 		ugd = (struct usb_gen_descriptor *)data;
 		ugd->ugd_actlen = min(sc->us_rsz, ugd->ugd_maxlen);
-		if (ugd->ugd_data == NULL)
+		if (ugd->ugd_data == NULL) {
+			UVHID_UNLOCK(sc);
 			break;
+		}
 		err = copyout(sc->us_rdesc, ugd->ugd_data, ugd->ugd_actlen);
 		UVHID_UNLOCK(sc);
 		break;
