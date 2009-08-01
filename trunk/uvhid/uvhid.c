@@ -246,6 +246,7 @@ hidctl_close(struct cdev *dev, int flag, int mode, struct thread *td)
 	sc->us_hcflags &= ~OPEN;
 	rq_reset(&sc->us_rq);
 	rq_reset(&sc->us_wq);
+	selwakeuppri(&sc->us_rsel, PZERO + 1);
 	if ((sc->us_hflags & OPEN) == 0)
 		cv_broadcast(&sc->us_cv);
 	UVHID_UNLOCK(sc);
@@ -340,6 +341,7 @@ hid_close(struct cdev *dev, int flag, int mode, struct thread *td)
 
 	UVHID_LOCK(sc);
 	sc->us_hflags &= ~OPEN;
+	selwakeuppri(&sc->us_wsel, PZERO + 1);
 	if ((sc->us_hcflags & OPEN) == 0)
 		cv_broadcast(&sc->us_cv);
 	UVHID_UNLOCK(sc);
