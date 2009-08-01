@@ -383,7 +383,7 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 		UVHID_LOCK(sc);
 		ugd = (struct usb_gen_descriptor *)data;
 		ugd->ugd_actlen = min(sc->us_rsz, ugd->ugd_maxlen);
-		if (ugd->ugd_data == NULL) {
+		if (ugd->ugd_data == NULL || ugd->ugd_actlen == 0) {
 			UVHID_UNLOCK(sc);
 			break;
 		}
