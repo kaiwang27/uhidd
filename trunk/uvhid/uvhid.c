@@ -281,6 +281,8 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 
 	err = 0;
 
+	printf("hidctl_ioctl called, cmd=%lu\n", cmd);
+
 	switch (cmd) {
 	case USB_SET_REPORT_DESC:
 		UVHID_LOCK(sc);
