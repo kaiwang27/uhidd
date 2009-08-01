@@ -29,7 +29,7 @@
 #ifndef _UVHID_VAR_H_
 #define _UVHID_VAR_H_
 
-#define USB_SET_REPORT_DESC     _IOWR('U', 26, struct usb_gen_descriptor)
-#define USB_SET_REPORT_ID       _IOR ('U', 27, int)
+#define USB_SET_REPORT_DESC     _IOW ('U', 26, struct usb_gen_descriptor)
+#define USB_SET_REPORT_ID       _IOW ('U', 27, int)
 
 #endif
