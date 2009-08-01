@@ -48,6 +48,7 @@ __FBSDID("$FreeBSD: trunk/uvhid/uvhid.c 36 2009-07-29 02:59:57Z kaiw27 $");
 #define	UVHIDCTL_NAME	"uvhidctl"
 #define	UVHID_QUEUE_SIZE	10240
 #define	UVHID_MAX_REPORT_SIZE	255
+#define UVHID_MAX_REPORT_DESC_SIZE	10240
 
 MALLOC_DECLARE(M_UVHID);
 MALLOC_DEFINE(M_UVHID, UVHID_NAME, "Virtual USB HID device");
@@ -82,7 +83,7 @@ struct uvhid_softc {
 #define	READ	(1 << 1)	/* read pending */
 #define	WRITE	(1 << 2)	/* write pending */
 
-	unsigned char	*us_rdesc;
+	unsigned char	us_rdesc[UVHID_MAX_REPORT_DESC_SIZE];
 	int		us_rsz;
 	int		us_rid;
 
@@ -292,10 +293,11 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 			UVHID_UNLOCK(sc);
 			break;
 		}
-		if (sc->us_rdesc)
-			free(sc->us_rdesc, M_UVHID);
-		sc->us_rdesc = malloc(ugd->ugd_actlen, M_UVHID,
-		    M_WAITOK|M_ZERO);
+		if (ugd->ugd_actlen > UVHID_MAX_REPORT_DESC_SIZE) {
+			UVHID_UNLOCK(sc);
+			err = ENXIO;
+			break;
+		}
 		sc->us_rsz = ugd->ugd_actlen;
 		err = copyin(ugd->ugd_data, sc->us_rdesc, ugd->ugd_actlen);
 		UVHID_UNLOCK(sc);
