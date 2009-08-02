@@ -32,7 +32,7 @@ __FBSDID("$FreeBSD$");
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "extern.h"
+#include "uhidd.h"
 
 static void	inoutstr(int dval);
 static const char *get_coll(int dval);

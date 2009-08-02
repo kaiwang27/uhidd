@@ -81,7 +81,7 @@ __FBSDID("$FreeBSD $");
 #include <syslog.h>
 #include <unistd.h>
 
-#include "extern.h"
+#include "uhidd.h"
 
 int verbose = 0;
 
