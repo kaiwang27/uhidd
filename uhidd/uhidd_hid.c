@@ -41,7 +41,7 @@ __FBSDID("$FreeBSD $");
 #include <unistd.h>
 #include "../uvhid/uvhid_var.h"
 
-#include "extern.h"
+#include "uhidd.h"
 
 void
 hid_attach(struct hid_child *hc)

@@ -39,7 +39,7 @@ __FBSDID("$FreeBSD $");
 #include <stdio.h>
 #include <string.h>
 
-#include "extern.h"
+#include "uhidd.h"
 
 void
 mouse_attach(struct hid_child *hc)

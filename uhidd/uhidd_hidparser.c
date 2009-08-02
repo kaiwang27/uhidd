@@ -37,7 +37,7 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 #include <stdlib.h>
 #include <string.h>
 
-#include "extern.h"
+#include "uhidd.h"
 
 static void	hid_clear_local(hid_item_t *c);
 static void	hid_parser_init(hid_parser_t p);

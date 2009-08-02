@@ -33,7 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <stdio.h>
 #include <stdio.h>
 
-#include "extern.h"
+#include "uhidd.h"
 
 extern int yylex(void);
 extern int yyparse(void);
