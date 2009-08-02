@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD $");
 #include <dev/usb/usb.h>
 #include <dev/usb/usb_ioctl.h>
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +63,8 @@ hid_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
+		if (verbose && errno == ENOENT)
+			PRINT2("uvhid.ko kernel moduel not loaded?\n")
 		return (-1);
 	}
 

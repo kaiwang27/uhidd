@@ -479,7 +479,9 @@ attach_hid_parent(struct hid_parent *hp)
 			hc = calloc(1, sizeof(*hc));
 			if (hc == NULL)
 				err(1, "calloc");
+			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
 			hc->parent = hp;
+			hc->ndx = hp->child_cnt;
 			hc->env = h;
 			start = lend;
 			lend = end;
@@ -513,12 +515,13 @@ attach_hid_parent(struct hid_parent *hp)
 			/*
 			 * Attach child.
 			 */
-			if (attach_hid_child(hc) != -1) {
-				hc->ndx = hp->child_cnt;
-				hp->child_cnt++;
-				STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
-			} else
+			if (attach_hid_child(hc) < 0) {
+				if (verbose)
+					PRINT2("ATTACH FAILED!\n");
+				STAILQ_REMOVE(&hp->hclist, hc, hid_child, next);
 				free(hc);
+			} else 
+				hp->child_cnt++;				
 		}
 	}
 	hid_end_parse(d);
@@ -748,7 +751,7 @@ dispatch(struct hid_parent *hp, char *buf, int len)
 	if (hc == NULL) {
 		if (verbose)
 			PRINT1("packet doesn't belong to any hid child, "
-			    "packet sent to the first child.");
+			    "packet sent to the first child.\n");
 		hc = STAILQ_FIRST(&hp->hclist);
 		child_recv(hc, buf, len);
 	}
