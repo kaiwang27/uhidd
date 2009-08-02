@@ -500,6 +500,8 @@ kbd_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
+		if (verbose && errno == ENOENT)
+			PRINT2("vkbd.ko kernel moduel not loaded?\n")
 		return (-1);
 	}
 
