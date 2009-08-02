@@ -58,7 +58,7 @@ static void	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
-static void	attach_hid_child(struct hid_child *hc);
+static int	attach_hid_child(struct hid_child *hc);
 static void	child_recv(struct hid_child *hc, char *buf, int len);
 static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
@@ -489,9 +489,6 @@ attach_hid_parent(struct hid_parent *hp)
 				    "child report desc range [%d-%d]", hp->dev,
 				    hp->ndx, start, end);
 			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
-			hc->ndx = hp->child_cnt;
-			hp->child_cnt++;
-			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
 			PRINT1("[%d-%d] ", start, end);
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
@@ -516,22 +513,29 @@ attach_hid_parent(struct hid_parent *hp)
 			/*
 			 * Attach child.
 			 */
-			attach_hid_child(hc);
+			if (attach_hid_child(hc) != -1) {
+				hc->ndx = hp->child_cnt;
+				hp->child_cnt++;
+				STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
+			} else
+				free(hc);
 		}
 	}
 	hid_end_parse(d);
 	hid_parser_free(p);
 }
 
-static void
+static int
 attach_hid_child(struct hid_child *hc)
 {
 	hid_parser_t p;
-	int i;
+	int i, r;
 
+	r = 0;
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
+
 	if (verbose > 2) {
 		printf("\t#id=%d ", hc->nr);
 		printf("rid=(");
@@ -540,7 +544,6 @@ attach_hid_child(struct hid_child *hc)
 			if (i < hc->nr - 1)
 				putchar(',');
 		}
-
 		printf(")\n");
 		if (hc->nr == 0)
 			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
@@ -562,6 +565,28 @@ attach_hid_child(struct hid_child *hc)
 	hc->p = p;
 
 	/*
+	 * Device type specific attachment.
+	 */
+
+	switch (hc->type) {
+	case UHIDD_MOUSE:
+		r = mouse_attach(hc);
+		break;
+	case UHIDD_KEYBOARD:
+		r = kbd_attach(hc);
+		break;
+	case UHIDD_HID:
+		r = hid_attach(hc);
+		break;
+	default:
+		/* Internal Error! */
+		assert(0);
+	}
+
+	if (r < 0)
+		return (r);
+
+	/*
 	 * Found applicable hidactions for this child.
 	 */
 
@@ -571,24 +596,7 @@ attach_hid_child(struct hid_child *hc)
 	if (!STAILQ_EMPTY(&gconfig.dclist))
 		find_device_hidaction(hc);
 
-	/*
-	 * Device type specific attachment.
-	 */
-
-	switch (hc->type) {
-	case UHIDD_MOUSE:
-		mouse_attach(hc);
-		break;
-	case UHIDD_KEYBOARD:
-		kbd_attach(hc);
-		break;
-	case UHIDD_HID:
-		hid_attach(hc);
-		break;
-	default:
-		/* Internal Error! */
-		assert(0);
-	}
+	return (0);
 }
 
 static void *

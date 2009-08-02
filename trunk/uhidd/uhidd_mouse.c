@@ -41,7 +41,7 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
-void
+int
 mouse_attach(struct hid_child *hc)
 {
 	struct hid_parent *hp;
@@ -53,7 +53,7 @@ mouse_attach(struct hid_child *hc)
 	hc->u.md.cons_fd = open("/dev/consolectl", O_RDWR);
 	if (hc->u.md.cons_fd < 0) {
 		PRINT2("could not open /dev/consolectl: %s", strerror(errno));
-		return;
+		return (-1);
 	}
 
 	/* Find X Axis. */
@@ -113,6 +113,8 @@ next:
 	hc->u.md.btn_cnt = i;
 	if (verbose)
 		PRINT2("%d buttons\n", hc->u.md.btn_cnt);
+
+	return (0);
 }
 
 void

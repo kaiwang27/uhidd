@@ -486,7 +486,7 @@ kbd_process_keys(struct hid_child *hc)
 	KBD.odata = KBD.ndata;
 }
 
-void
+int
 kbd_attach(struct hid_child *hc)
 {
 	struct hid_parent *hp;
@@ -500,7 +500,7 @@ kbd_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
-		return;
+		return (-1);
 	}
 
 	if (verbose) {
@@ -508,7 +508,7 @@ kbd_attach(struct hid_child *hc)
 			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
 			    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 			    type_name(hc->type));
-			return;
+			return (-1);
 		}
 		PRINT2("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 	}
@@ -532,6 +532,8 @@ kbd_attach(struct hid_child *hc)
 		PRINT2("warning: no keycode array\n");
 
 	KBD.key_cnt = KBD.keys.report_count;
+
+	return (0);
 }
 
 void

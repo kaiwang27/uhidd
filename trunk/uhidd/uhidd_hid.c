@@ -43,7 +43,7 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
-void
+int
 hid_attach(struct hid_child *hc)
 {
 	struct hid_parent *hp;
@@ -62,20 +62,20 @@ hid_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
-		return;
+		return (-1);
 	}
 
 	if (fstat(hc->u.hd.hidctl_fd, &sb) < 0) {
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
 		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
-		return;
+		return (-1);
 	}
 
 	if ((hc->u.hd.name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> strdup failed: %m",
 		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));
-		return;
+		return (-1);
 	}
 		
 	if (verbose)
@@ -92,7 +92,7 @@ hid_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> "
 		    "ioctl(USB_SET_REPORT_DESC): %m", hp->dev, hp->ndx,
 		    hc->ndx, type_name(hc->type));
-		return;
+		return (-1);
 	}
 
 	/*
@@ -110,8 +110,10 @@ hid_attach(struct hid_child *hc)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> "
 		    "ioctl(USB_SET_REPORT_ID): %m", hp->dev, hp->ndx,
 		    hc->ndx, type_name(hc->type));
-		return;
+		return (-1);
 	}
+
+	return (0);
 }
 
 void
