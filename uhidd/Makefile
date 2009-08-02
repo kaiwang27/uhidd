@@ -1,5 +1,5 @@
 PROG=	uhidd
-SRCS=	hidparser.c hidump.c kbd.c main.c mouse.c lex.l \
+SRCS=	hid.c hidparser.c hidump.c kbd.c main.c mouse.c lex.l \
 	parser.y y.tab.h usage_in_page.c usage_page.c
 
 GENSRCS=	usage_in_page.c usage_page.c

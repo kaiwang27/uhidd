@@ -626,7 +626,7 @@ attach_hid_child(struct hid_child *hc)
 		kbd_attach(hc);
 		break;
 	case UHIDD_HID:
-/* 		hid_attach(hc); */
+		hid_attach(hc);
 		break;
 	default:
 		/* Internal Error! */

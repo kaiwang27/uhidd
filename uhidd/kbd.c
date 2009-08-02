@@ -498,19 +498,16 @@ kbd_attach(struct hid_child *hc)
 	/* Open /dev/vkbdctl. */
 	if ((KBD.vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
-		    "/dev/vkbdctl: %s", hp->dev, hp->ndx, hc->ndx,
-		    type_name(hc->type), strerror(errno));
+		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
+		    type_name(hc->type));
 		return;
 	}
 
 	if (verbose) {
 		if (fstat(KBD.vkbd_fd, &sb) < 0) {
 			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
-			    "/dev/vkbdctl: %s\n", hp->dev, hp->ndx, hc->ndx,
-			    type_name(hc->type), strerror(errno));
-
-			printf("%s: iface(%d) fstat failed: %s\n", hp->dev,
-			    hp->ndx, strerror(errno));
+			    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
+			    type_name(hc->type));
 			return;
 		}
 		PRINT2("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
