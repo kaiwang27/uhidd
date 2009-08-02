@@ -705,7 +705,7 @@ match_hidaction(struct hid_child *hc, struct hidaction_config *hac)
 					    usage_in_page(HID_PAGE(u),
 					    HID_USAGE(u)));
 					if (verbose > 3)
-						printf("usage %s\n", ub);
+						printf("coll.usage %s\n", ub);
 					if (!strcasecmp(ub, hac->usage))
 						goto foundhid;
 				}
@@ -744,7 +744,8 @@ foundhid:
 	STAILQ_INSERT_TAIL(&hc->halist, ha, next);
 
 	if (verbose)
-		PRINT2("Found match for usage %s at %d\n", hac->usage, h.pos);
+		PRINT2("Found match for usage %s at (rid:%d pos:%d)\n",
+		    hac->usage, h.report_ID, h.pos);
 }
 
 #define CMDSZ	1024
