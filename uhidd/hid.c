@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD $");
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
 #include <unistd.h>
 #include "../uvhid/uvhid_var.h"
@@ -64,15 +65,21 @@ hid_attach(struct hid_child *hc)
 		return;
 	}
 
-	if (verbose) {
-		if (fstat(hc->u.hd.hidctl_fd, &sb) < 0) {
-			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
-			    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
-			    type_name(hc->type));
-			return;
-		}
-		PRINT2("hid device name: %s\n", devname(sb.st_rdev, S_IFCHR));
+	if (fstat(hc->u.hd.hidctl_fd, &sb) < 0) {
+		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
+		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
+		    type_name(hc->type));
+		return;
 	}
+
+	if ((hc->u.hd.name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
+		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> strdup failed: %m",
+		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));
+		return;
+	}
+		
+	if (verbose)
+		PRINT2("hid device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 
 	/*
 	 * Set the report descriptor of this virtual hid device.
@@ -117,9 +124,9 @@ hid_recv(struct hid_child *hc, char *buf, int len)
 	assert(hp != NULL);
 
 	if (verbose) {
-		PRINT2("general hid received data:");
+		PRINT2("%s received data:", hc->u.hd.name);
 		for (i = 0; i < len; i++)
-			printf(" 0x%02x", buf[i]);
+			printf(" %d", buf[i]);
 		putchar('\n');
 	}
 

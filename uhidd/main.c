@@ -993,7 +993,7 @@ child_recv(struct hid_child *hc, char *buf, int len)
 		kbd_recv(hc, buf, len);
 		break;
 	case UHIDD_HID:
-/* 		hid_recv(hc, buf, len); */
+		hid_recv(hc, buf, len);
 		break;
 	default:
 		/* Internal Error! */
