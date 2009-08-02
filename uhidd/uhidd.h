@@ -320,7 +320,7 @@ void		dump_report_desc(unsigned char *, int);
 void		find_device_hidaction(struct hid_child *);
 void		find_global_hidaction(struct hid_child *);
 void		hexdump(unsigned char *, int);
-void		hid_attach(struct hid_child *);
+int		hid_attach(struct hid_child *);
 void		hid_recv(struct hid_child *, char *, int);
 hid_parser_t	hid_parser_alloc(unsigned char *, int);
 void		hid_parser_free(hid_parser_t);
@@ -335,10 +335,10 @@ int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
 int		hid_get_data(const void *, const hid_item_t *);
 int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
-void		kbd_attach(struct hid_child *);
+int		kbd_attach(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
-void		mouse_attach(struct hid_child *);
+int		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
 int		read_config_file(void);
 void		run_hidaction(struct hid_child *, struct hidaction *, char *,
