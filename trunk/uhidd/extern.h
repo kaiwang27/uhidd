@@ -201,6 +201,7 @@ struct kbd_dev {
 
 struct hid_dev {
 	int hidctl_fd;
+	char *name;
 };
 
 /*
