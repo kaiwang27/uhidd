@@ -196,6 +196,14 @@ struct kbd_dev {
 };
 
 /*
+ * General HID device.
+ */
+
+struct hid_dev {
+	int hidctl_fd;
+};
+
+/*
  * HID parent and child data structures.
  */
 
@@ -245,6 +253,7 @@ struct hid_child {
 	union {
 		struct mouse_dev md;
 		struct kbd_dev kd;
+		struct hid_dev hd;
 	} u;
 	STAILQ_HEAD(, hidaction) halist;
 	STAILQ_ENTRY(hid_child)	 next;
@@ -308,6 +317,8 @@ extern struct glob_config gconfig;
 
 void		dump_report_desc(unsigned char *, int);
 void		hexdump(unsigned char *, int);
+void		hid_attach(struct hid_child *);
+void		hid_recv(struct hid_child *, char *, int);
 hid_parser_t	hid_parser_alloc(unsigned char *, int);
 void		hid_parser_free(hid_parser_t);
 int		hid_get_report_id_num(hid_parser_t);
