@@ -116,6 +116,7 @@ device_conf
 		memcpy(dconfig_p, &dconfig, sizeof(struct device_config));
 		STAILQ_INSERT_TAIL(&gconfig.dclist, dconfig_p, next);
 		memset(&dconfig, 0 ,sizeof(struct device_config));
+		dconfig.attach = 1;
 		STAILQ_INIT(&dconfig.halist);
 	}
 	;
@@ -156,55 +157,67 @@ attach
 
 attachmouse
 	: T_ATTACHMOUSE T_YES {
-		gconfig.attach_mouse = 1;
+		if (gconfig.attach_mouse == -1)
+			gconfig.attach_mouse = 1;
 	}
 	| T_ATTACHMOUSE T_NO {
-		gconfig.attach_mouse = 0;
+		if (gconfig.attach_mouse == -1)
+			gconfig.attach_mouse = 0;
 	}
 	;
 
 attachkeyboard
 	: T_ATTACHKEYBOARD T_YES {
-		gconfig.attach_kbd = 1;
+		if (gconfig.attach_kbd == -1)
+			gconfig.attach_kbd = 1;
 	}
 	| T_ATTACHKEYBOARD T_NO {
-		gconfig.attach_kbd = 0;
+		if (gconfig.attach_kbd == -1)
+			gconfig.attach_kbd = 0;
 	}
 	;
 
 attachhid
 	: T_ATTACHHID T_YES {
-		gconfig.attach_hid = 1;
+		if (gconfig.attach_hid == -1)
+			gconfig.attach_hid = 1;
 	}
 	| T_ATTACHHID T_NO {
-		gconfig.attach_hid = 0;
+		if (gconfig.attach_hid == -1)
+			gconfig.attach_hid = 0;
 	}
 	;
 
 detachkerneldriver
 	: T_DETACHKERNELDRIVER T_YES {
-		gconfig.detach_kernel_driver = 1;
+		if (gconfig.detach_kernel_driver == -1)
+			gconfig.detach_kernel_driver = 1;
 	}
 	| T_DETACHKERNELDRIVER T_NO {
-		gconfig.detach_kernel_driver = 0;
+		if (gconfig.detach_kernel_driver == -1)
+			gconfig.detach_kernel_driver = 0;
 	}
 	;
 
 attachmouseashid
 	: T_ATTACHMOUSEASHID T_YES {
-		gconfig.attach_mouse_as_hid = 1;
+		if (gconfig.attach_mouse_as_hid == -1)
+			gconfig.attach_mouse_as_hid = 1;
 	}
 	| T_ATTACHMOUSEASHID T_NO {
-		gconfig.attach_mouse_as_hid = 0;
+		if (gconfig.attach_mouse_as_hid == -1)
+			gconfig.attach_mouse_as_hid = 0;
 	}
 	;
 
 attachkeyboardashid
 	: T_ATTACHKEYBOARDASHID T_YES {
-		gconfig.attach_kbd_as_hid = 1;
+		if (gconfig.attach_kbd_as_hid == -1)
+			gconfig.attach_kbd_as_hid = 1;
 	}
 	| T_ATTACHKEYBOARDASHID T_NO {
-		gconfig.attach_kbd_as_hid = 0;
+		if (gconfig.attach_kbd_as_hid == -1)
+			gconfig.attach_kbd_as_hid = 0;
 	}
 	;
 
@@ -244,14 +257,26 @@ yyerror(const char *s)
 	exit(1);
 }
 
-int
-read_config_file(void)
+void
+config_init(void)
 {
-	int r;
 
 	STAILQ_INIT(&gconfig.dclist);
 	STAILQ_INIT(&gconfig.halist);
 	STAILQ_INIT(&dconfig.halist);
+	gconfig.attach_mouse = -1;
+	gconfig.attach_kbd = -1;
+	gconfig.attach_hid = -1;
+	gconfig.detach_kernel_driver = -1;
+	gconfig.attach_mouse_as_hid = -1;
+	gconfig.attach_kbd_as_hid = -1;
+	dconfig.attach = 1;
+}
+
+int
+config_read_file(void)
+{
+	int r;
 
 	if ((yyin = fopen(config_file, "r")) == NULL) {
 		fprintf(stderr, "open %s failed: %s", config_file,
@@ -264,6 +289,23 @@ read_config_file(void)
 		r = -1;
 
 	fclose(yyin);
+
+	/*
+	 * Default configuration.
+	 */
+
+	if (gconfig.attach_mouse < 0)
+		gconfig.attach_mouse = 1;
+	if (gconfig.attach_kbd < 0)
+		gconfig.attach_kbd = 0;
+	if (gconfig.attach_hid < 0)
+		gconfig.attach_hid = 1;
+	if (gconfig.detach_kernel_driver < 0)
+		gconfig.detach_kernel_driver = 0;
+	if (gconfig.attach_mouse_as_hid < 0)
+		gconfig.attach_mouse_as_hid = 0;
+	if (gconfig.attach_kbd_as_hid < 0)
+		gconfig.attach_kbd_as_hid = 0;
 
 	return (r);
 }

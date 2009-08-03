@@ -311,6 +311,7 @@ type_name(enum uhidd_ctype t)
 
 extern int verbose;
 extern struct glob_config gconfig;
+extern const char *config_file;
 
 /*
  * Prototypes.
@@ -340,7 +341,8 @@ void		kbd_recv(struct hid_child *, char *, int);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
 int		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
-int		read_config_file(void);
+void		config_init(void);
+int		config_read_file(void);
 void		run_hidaction(struct hid_child *, struct hidaction *, char *,
 		    int);
 const char	*usage_page(int);

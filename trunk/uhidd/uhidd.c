@@ -34,7 +34,6 @@ __FBSDID("$FreeBSD $");
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
 #include <assert.h>
-#include <err.h>
 #include <fcntl.h>
 #include <libusb20.h>
 #include <libusb20_desc.h>
@@ -71,20 +70,41 @@ main(int argc, char **argv)
 	struct libusb20_backend *backend;
 	int opt;
 
-	/*
-	 * Read config file before processing cmd line args.
-	 */
-	if (read_config_file() < 0)
-		errx(1, "read_config_file failed");
+	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
 
-	while ((opt = getopt(argc, argv, "dv")) != -1) {
+	config_init();
+
+	while ((opt = getopt(argc, argv, "cdhkKmMuv")) != -1) {
 		switch(opt) {
+		case 'c':
+			config_file = optarg;
+			break;
 		case 'd':
 			detach = 0;
 			break;
+		case 'h':
+			gconfig.attach_hid = 1;
+			break;
+		case 'k':
+			gconfig.attach_kbd = 1;
+			break;
+		case 'K':
+			gconfig.attach_kbd = 1;
+			gconfig.attach_kbd_as_hid = 1;
+			break;
+		case 'm':
+			gconfig.attach_mouse = 1;
+			break;
+		case 'M':
+			gconfig.attach_mouse = 1;
+			gconfig.attach_mouse_as_hid = 1;
+			break;
+		case 'u':
+			gconfig.detach_kernel_driver = 1;
+			break;
 		case 'v':
-			verbose++;
 			detach = 0;
+			verbose++;
 			break;
 		default:
 			usage();
@@ -97,12 +117,17 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
+	if (config_read_file() < 0)
+		syslog(LOG_WARNING, "Unable to read config file: %s",
+		    config_file);
+
 	if (detach) {
-		if (daemon(0, 0) < 0)
-			err(1, "daemon");
+		if (daemon(0, 0) < 0) {
+			syslog(LOG_ERR, "daemon failed: %m");
+			exit(1);
+		}
 	}
 
-	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
 
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
@@ -116,10 +141,15 @@ main(int argc, char **argv)
 
 	if (STAILQ_EMPTY(&hplist))
 		exit(0);
-	STAILQ_FOREACH(hp, &hplist, next)
-		pthread_create(&hp->thread, NULL, start_hid_parent, (void *)hp);
-	STAILQ_FOREACH(hp, &hplist, next)
-		pthread_join(hp->thread, NULL);
+	STAILQ_FOREACH(hp, &hplist, next) {
+		if (!STAILQ_EMPTY(&hp->hclist))
+		    pthread_create(&hp->thread, NULL, start_hid_parent,
+			(void *)hp);
+	}
+	STAILQ_FOREACH(hp, &hplist, next) {
+		if (!STAILQ_EMPTY(&hp->hclist))
+			pthread_join(hp->thread, NULL);
+	}
 
 	syslog(LOG_NOTICE, "terminated\n");
 
@@ -150,8 +180,10 @@ find_and_attach(struct libusb20_backend *backend, const char *dev)
 static void
 attach_dev(const char *dev, struct libusb20_device *pdev)
 {
+	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct libusb20_config *config;
 	struct libusb20_interface *iface;
+	struct device_config *dc;
 	int cndx, e, i;
 
 	e = libusb20_dev_open(pdev, 32);
@@ -170,12 +202,24 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 		return;
 	}
 
+	ddesc = libusb20_dev_get_device_desc(pdev);
+	STAILQ_FOREACH(dc, &gconfig.dclist, next) {
+		if (dc->vendor_id == ddesc->idVendor &&
+		    dc->product_id == ddesc->idProduct)
+			break;
+	}
+
 	/*
 	 * Iterate each interface.
 	 */
 	for (i = 0; i < config->num_interface; i++) {
 		iface = &config->interface[i];
 		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
+			if (dc && !dc->attach &&
+			    (dc->interface == -1 || dc->interface == i)) {
+				PRINT0(dev, i, "HID interface IGNORED\n");
+				continue;
+			}
 			if (verbose)
 				PRINT0(dev, i, "HID interface\n");
 			attach_iface(dev, pdev, iface, i);
@@ -189,13 +233,13 @@ static void
 attach_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int ndx)
 {
+	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_parent *hp;
 	struct libusb20_endpoint *ep;
 	unsigned char rdesc[16384];
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
-
 
 #if 0
 	/* XXX ioctl currently unimplemented */
@@ -251,8 +295,10 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	 */
 
 	hp = calloc(1, sizeof(*hp));
-	if (hp == NULL)
-		err(1, "calloc");
+	if (hp == NULL) {
+		syslog(LOG_ERR, "calloc failed: %m");
+		exit(1);
+	}
 	hp->dev = dev;
 	hp->pdev = pdev;
 	hp->iface = iface;
@@ -260,6 +306,9 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	memcpy(hp->rdesc, rdesc, actlen);
 	hp->rsz = actlen;
 	STAILQ_INIT(&hp->hclist);
+	ddesc = libusb20_dev_get_device_desc(pdev);
+	hp->vendor_id = ddesc->idVendor;
+	hp->product_id = ddesc->idProduct;
 
 	/*
 	 * Find the input interrupt endpoint.
@@ -477,8 +526,10 @@ attach_hid_parent(struct hid_parent *hp)
 		    ch.collevel - 1 == h.collevel) {
 			end = d->p - d->start;
 			hc = calloc(1, sizeof(*hc));
-			if (hc == NULL)
-				err(1, "calloc");
+			if (hc == NULL) {
+				syslog(LOG_ERR, "calloc failed: %m");
+				exit(1);
+			}
 			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
 			hc->parent = hp;
 			hc->ndx = hp->child_cnt;
@@ -494,15 +545,52 @@ attach_hid_parent(struct hid_parent *hp)
 			PRINT1("[%d-%d] ", start, end);
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
-				printf("*MOUSE FOUND*\n");
-				hc->type = UHIDD_MOUSE;
+				if (gconfig.attach_mouse) {
+					printf("*MOUSE FOUND*");
+					if (gconfig.attach_mouse_as_hid) {
+						hc->type = UHIDD_HID;
+						printf(" (ATTACHED AS HID)\n");
+					} else {
+						hc->type = UHIDD_MOUSE;
+						putchar('\n');
+					}
+				} else {
+					printf("*MOUSE IGNORED*\n");
+					STAILQ_REMOVE(&hp->hclist, hc,
+					    hid_child, next);
+					free(hc);
+					continue;
+				}
 			} else if (ch.usage ==
 			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
-				printf("*KEYBOARD FOUND*\n");
-				hc->type = UHIDD_KEYBOARD;
+				if (gconfig.attach_kbd) {
+					printf("*KEYBOARD FOUND*");
+					if (gconfig.attach_kbd_as_hid) {
+						hc->type = UHIDD_HID;
+						printf(" (ATTACHED AS HID)\n");
+					} else {
+						hc->type = UHIDD_KEYBOARD;
+						putchar('\n');
+					}
+				} else {
+					printf("*KEYBOARD IGNORED*\n");
+					STAILQ_REMOVE(&hp->hclist, hc,
+					    hid_child, next);
+					free(hc);
+					continue;
+				}
 			} else {
-				printf("*GENERAL HID DEVICE FOUND*\n");
-				hc->type = UHIDD_HID;
+				if (gconfig.attach_hid) {
+					printf("*GENERAL HID DEVICE FOUND*\n");
+					hc->type = UHIDD_HID;
+				} else {
+					printf("*GENERAL HID DEVICE "
+					    "IGNORED*\n");
+					STAILQ_REMOVE(&hp->hclist, hc,
+					    hid_child, next);
+					free(hc);
+					continue;
+				}
 			}
 
 			/*
@@ -535,9 +623,18 @@ attach_hid_child(struct hid_child *hc)
 	int i, r;
 
 	r = 0;
+
+	/*
+	 * Allocate a separate hid parser for the child.
+	 */
+
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
+
+	/*
+	 * Dump the report IDs for debugging.
+	 */
 
 	if (verbose > 2) {
 		printf("\t#id=%d ", hc->nr);
@@ -745,15 +842,12 @@ dispatch(struct hid_parent *hp, char *buf, int len)
 	}
 
 	/*
-	 * If there are no matching child device, the report desc is probably
-	 * broken. Just send the packet to the first child.
+	 * If there are no matching child device, discard the packet.
 	 */
 	if (hc == NULL) {
 		if (verbose)
 			PRINT1("packet doesn't belong to any hid child, "
-			    "packet sent to the first child.\n");
-		hc = STAILQ_FIRST(&hp->hclist);
-		child_recv(hc, buf, len);
+			    "packet discarded.\n");
 	}
 }
 
@@ -796,6 +890,6 @@ static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: uhidd [-dk] /dev/ugen%%u.%%u\n");
+	fprintf(stderr, "usage: uhidd [-cdhkKmMuv] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
