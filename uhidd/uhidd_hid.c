@@ -135,6 +135,11 @@ hid_recv(struct hid_child *hc, char *buf, int len)
 		putchar('\n');
 	}
 
+	if (gconfig.strip_report_id) {
+		buf++;
+		len--;
+	}
+
 	if (write(hc->u.hd.hidctl_fd, buf, len) < 0)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> write failed: %m",
 		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));

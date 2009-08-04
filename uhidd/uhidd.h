@@ -145,6 +145,7 @@ struct glob_config {
 	int detach_kernel_driver;
 	int attach_mouse_as_hid;
 	int attach_kbd_as_hid;
+	int strip_report_id;
 	STAILQ_HEAD(, hidaction_config) halist;
 	STAILQ_HEAD(, device_config) dclist;
 };

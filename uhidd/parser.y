@@ -270,6 +270,7 @@ config_init(void)
 	gconfig.detach_kernel_driver = -1;
 	gconfig.attach_mouse_as_hid = -1;
 	gconfig.attach_kbd_as_hid = -1;
+	gconfig.strip_report_id = -1;
 	dconfig.attach = 1;
 }
 
@@ -306,6 +307,8 @@ config_read_file(void)
 		gconfig.attach_mouse_as_hid = 0;
 	if (gconfig.attach_kbd_as_hid < 0)
 		gconfig.attach_kbd_as_hid = 0;
+	if (gconfig.strip_report_id < 0)
+		gconfig.strip_report_id = 0;
 
 	return (r);
 }

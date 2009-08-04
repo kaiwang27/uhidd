@@ -74,7 +74,7 @@ main(int argc, char **argv)
 
 	config_init();
 
-	while ((opt = getopt(argc, argv, "cdhkKmMuv")) != -1) {
+	while ((opt = getopt(argc, argv, "cdhkKmMsuv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -98,6 +98,9 @@ main(int argc, char **argv)
 		case 'M':
 			gconfig.attach_mouse = 1;
 			gconfig.attach_mouse_as_hid = 1;
+			break;
+		case 's':
+			gconfig.strip_report_id = 1;
 			break;
 		case 'u':
 			gconfig.detach_kernel_driver = 1;
