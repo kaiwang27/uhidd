@@ -179,7 +179,7 @@ hidctl_clone(void *arg, struct ucred *cred, char *name, int namelen,
 	hid_dev = NULL;
 	if (clone_create(&hid_clones, &hid_cdevsw, &unit, dev, 0)) {
 		hid_dev = make_dev(&hid_cdevsw, unit, UID_ROOT, GID_WHEEL,
-		    0600, UVHID_NAME "%d", unit);
+		    0644, UVHID_NAME "%d", unit);
 		if (hid_dev != NULL) {
 			dev_ref(hid_dev);
 			hid_dev->si_flags |= SI_CHEAPCLONE;
