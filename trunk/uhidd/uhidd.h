@@ -130,15 +130,9 @@ struct hidaction_config {
 };
 
 struct device_config {
-	int attach;
 	int vendor_id;
 	int product_id;
 	int interface;
-	STAILQ_HEAD(, hidaction_config) halist;
-	STAILQ_ENTRY(device_config) next;
-};
-
-struct glob_config {
 	int attach_mouse;
 	int attach_kbd;
 	int attach_hid;
@@ -146,6 +140,12 @@ struct glob_config {
 	int attach_mouse_as_hid;
 	int attach_kbd_as_hid;
 	int strip_report_id;
+	STAILQ_HEAD(, hidaction_config) halist;
+	STAILQ_ENTRY(device_config) next;
+};
+
+struct uhidd_config {
+	struct device_config gconfig;
 	STAILQ_HEAD(, hidaction_config) halist;
 	STAILQ_HEAD(, device_config) dclist;
 };
@@ -311,7 +311,8 @@ type_name(enum uhidd_ctype t)
  */
 
 extern int verbose;
-extern struct glob_config gconfig;
+extern struct uhidd_config uconfig;
+extern struct device_config clconfig;
 extern const char *config_file;
 
 /*
@@ -342,8 +343,15 @@ void		kbd_recv(struct hid_child *, char *, int);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
 int		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
+struct device_config *config_find_device(int, int, int);
+int		config_attach_mouse(struct hid_parent *);
+int		config_attach_kbd(struct hid_parent *);
+int		config_attach_hid(struct hid_parent *);
+int		config_attach_mouse_as_hid(struct hid_parent *)
+;int		config_attach_kbd_as_hid(struct hid_parent *);
 void		config_init(void);
 int		config_read_file(void);
+int		config_strip_report_id(struct hid_parent *);
 void		run_hidaction(struct hid_child *, struct hidaction *, char *,
 		    int);
 const char	*usage_page(int);

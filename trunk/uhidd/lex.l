@@ -53,8 +53,8 @@ AttachHID		{ return (T_ATTACHHID); }
 DetachKernelDriver	{ return (T_DETACHKERNELDRIVER); }
 AttachMouseAsHID	{ return (T_ATTACHMOUSEASHID); }
 AttachKeyboardAsHID	{ return (T_ATTACHKEYBOARDASHID); }
-generic			{ return (T_GENERIC); }
-Attach			{ return (T_ATTACH); }
+StripReportID		{ return (T_STRIPREPORTID); }
+global			{ return (T_GLOBAL); }
 
 0x[0-9a-fA-F]+		{
 				yylval.val = strtoul(yytext, NULL, 16);

@@ -76,7 +76,7 @@ find_global_hidaction(struct hid_child *hc)
 {
 	struct hidaction_config *hac;
 
-	STAILQ_FOREACH(hac, &gconfig.halist, next)
+	STAILQ_FOREACH(hac, &uconfig.gconfig.halist, next)
 		match_hidaction(hc, hac);
 }
 
@@ -90,7 +90,7 @@ find_device_hidaction(struct hid_child *hc)
 	hp = hc->parent;
 	assert(hp != NULL);
 
-	STAILQ_FOREACH(dc, &gconfig.dclist, next) {
+	STAILQ_FOREACH(dc, &uconfig.dclist, next) {
 		if (dc->vendor_id != hp->vendor_id ||
 		    dc->product_id != hp->product_id)
 			continue;

@@ -135,7 +135,7 @@ hid_recv(struct hid_child *hc, char *buf, int len)
 		putchar('\n');
 	}
 
-	if (gconfig.strip_report_id) {
+	if (config_strip_report_id(hp)) {
 		buf++;
 		len--;
 	}
