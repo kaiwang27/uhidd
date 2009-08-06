@@ -83,27 +83,27 @@ main(int argc, char **argv)
 			detach = 0;
 			break;
 		case 'h':
-			gconfig.attach_hid = 1;
+			clconfig.attach_hid = 1;
 			break;
 		case 'k':
-			gconfig.attach_kbd = 1;
+			clconfig.attach_kbd = 1;
 			break;
 		case 'K':
-			gconfig.attach_kbd = 1;
-			gconfig.attach_kbd_as_hid = 1;
+			clconfig.attach_kbd = 1;
+			clconfig.attach_kbd_as_hid = 1;
 			break;
 		case 'm':
-			gconfig.attach_mouse = 1;
+			clconfig.attach_mouse = 1;
 			break;
 		case 'M':
-			gconfig.attach_mouse = 1;
-			gconfig.attach_mouse_as_hid = 1;
+			clconfig.attach_mouse = 1;
+			clconfig.attach_mouse_as_hid = 1;
 			break;
 		case 's':
-			gconfig.strip_report_id = 1;
+			clconfig.strip_report_id = 1;
 			break;
 		case 'u':
-			gconfig.detach_kernel_driver = 1;
+			clconfig.detach_kernel_driver = 1;
 			break;
 		case 'v':
 			detach = 0;
@@ -186,7 +186,6 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct libusb20_config *config;
 	struct libusb20_interface *iface;
-	struct device_config *dc;
 	int cndx, e, i;
 
 	e = libusb20_dev_open(pdev, 32);
@@ -206,11 +205,6 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	}
 
 	ddesc = libusb20_dev_get_device_desc(pdev);
-	STAILQ_FOREACH(dc, &gconfig.dclist, next) {
-		if (dc->vendor_id == ddesc->idVendor &&
-		    dc->product_id == ddesc->idProduct)
-			break;
-	}
 
 	/*
 	 * Iterate each interface.
@@ -218,11 +212,6 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	for (i = 0; i < config->num_interface; i++) {
 		iface = &config->interface[i];
 		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
-			if (dc && !dc->attach &&
-			    (dc->interface == -1 || dc->interface == i)) {
-				PRINT0(dev, i, "HID interface IGNORED\n");
-				continue;
-			}
 			if (verbose)
 				PRINT0(dev, i, "HID interface\n");
 			attach_iface(dev, pdev, iface, i);
@@ -548,9 +537,9 @@ attach_hid_parent(struct hid_parent *hp)
 			PRINT1("[%d-%d] ", start, end);
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
-				if (gconfig.attach_mouse) {
+				if (config_attach_mouse(hp)) {
 					printf("*MOUSE FOUND*");
-					if (gconfig.attach_mouse_as_hid) {
+					if (config_attach_mouse_as_hid(hp)) {
 						hc->type = UHIDD_HID;
 						printf(" (ATTACHED AS HID)\n");
 					} else {
@@ -566,9 +555,9 @@ attach_hid_parent(struct hid_parent *hp)
 				}
 			} else if (ch.usage ==
 			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
-				if (gconfig.attach_kbd) {
+				if (config_attach_kbd(hp)) {
 					printf("*KEYBOARD FOUND*");
-					if (gconfig.attach_kbd_as_hid) {
+					if (config_attach_kbd_as_hid(hp)) {
 						hc->type = UHIDD_HID;
 						printf(" (ATTACHED AS HID)\n");
 					} else {
@@ -583,7 +572,7 @@ attach_hid_parent(struct hid_parent *hp)
 					continue;
 				}
 			} else {
-				if (gconfig.attach_hid) {
+				if (config_attach_hid(hp)) {
 					printf("*GENERAL HID DEVICE FOUND*\n");
 					hc->type = UHIDD_HID;
 				} else {
@@ -694,9 +683,9 @@ attach_hid_child(struct hid_child *hc)
 	 */
 
 	STAILQ_INIT(&hc->halist);
-	if (!STAILQ_EMPTY(&gconfig.halist))
+	if (!STAILQ_EMPTY(&uconfig.gconfig.halist))
 		find_global_hidaction(hc);
-	if (!STAILQ_EMPTY(&gconfig.dclist))
+	if (!STAILQ_EMPTY(&uconfig.dclist))
 		find_device_hidaction(hc);
 
 	return (0);
