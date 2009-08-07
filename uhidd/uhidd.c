@@ -88,16 +88,8 @@ main(int argc, char **argv)
 		case 'k':
 			clconfig.attach_kbd = 1;
 			break;
-		case 'K':
-			clconfig.attach_kbd = 1;
-			clconfig.attach_kbd_as_hid = 1;
-			break;
 		case 'm':
 			clconfig.attach_mouse = 1;
-			break;
-		case 'M':
-			clconfig.attach_mouse = 1;
-			clconfig.attach_mouse_as_hid = 1;
 			break;
 		case 's':
 			clconfig.strip_report_id = 1;
@@ -537,14 +529,8 @@ attach_hid_parent(struct hid_parent *hp)
 			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
 			    HUG_MOUSE)) {
 				if (config_attach_mouse(hp)) {
-					printf("*MOUSE FOUND*");
-					if (config_attach_mouse_as_hid(hp)) {
-						hc->type = UHIDD_HID;
-						printf(" (ATTACHED AS HID)\n");
-					} else {
-						hc->type = UHIDD_MOUSE;
-						putchar('\n');
-					}
+					printf("*MOUSE FOUND*\n");
+					hc->type = UHIDD_MOUSE;
 				} else {
 					printf("*MOUSE IGNORED*\n");
 					STAILQ_REMOVE(&hp->hclist, hc,
@@ -555,14 +541,8 @@ attach_hid_parent(struct hid_parent *hp)
 			} else if (ch.usage ==
 			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
 				if (config_attach_kbd(hp)) {
-					printf("*KEYBOARD FOUND*");
-					if (config_attach_kbd_as_hid(hp)) {
-						hc->type = UHIDD_HID;
-						printf(" (ATTACHED AS HID)\n");
-					} else {
-						hc->type = UHIDD_KEYBOARD;
-						putchar('\n');
-					}
+					printf("*KEYBOARD FOUND*\n");
+					hc->type = UHIDD_KEYBOARD;
 				} else {
 					printf("*KEYBOARD IGNORED*\n");
 					STAILQ_REMOVE(&hp->hclist, hc,

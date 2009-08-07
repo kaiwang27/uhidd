@@ -55,8 +55,6 @@ static struct device_config dconfig, *dconfig_p;
 %token T_ATTACHKEYBOARD
 %token T_ATTACHHID
 %token T_DETACHKERNELDRIVER
-%token T_ATTACHMOUSEASHID
-%token T_ATTACHKEYBOARDASHID
 %token T_STRIPREPORTID
 %token T_GLOBAL
 %token <val> T_NUM
@@ -136,8 +134,6 @@ conf_entry
 	| attachkeyboard
 	| attachhid
 	| detachkerneldriver
-	| attachmouseashid
-	| attachkeyboardashid
 	| stripreportid
 	| hidaction_conf {
 		STAILQ_INSERT_TAIL(&dconfig.halist, $1, next);
@@ -177,24 +173,6 @@ detachkerneldriver
 	}
 	| T_DETACHKERNELDRIVER T_NO {
 		dconfig.detach_kernel_driver = 0;
-	}
-	;
-
-attachmouseashid
-	: T_ATTACHMOUSEASHID T_YES {
-		dconfig.attach_mouse_as_hid = 1;
-	}
-	| T_ATTACHMOUSEASHID T_NO {
-		dconfig.attach_mouse_as_hid = 0;
-	}
-	;
-
-attachkeyboardashid
-	: T_ATTACHKEYBOARDASHID T_YES {
-		dconfig.attach_kbd_as_hid = 1;
-	}
-	| T_ATTACHKEYBOARDASHID T_NO {
-		dconfig.attach_kbd_as_hid = 0;
 	}
 	;
 
@@ -257,8 +235,6 @@ config_init(void)
 	clconfig.attach_mouse = -1;
 	clconfig.attach_kbd = -1;
 	clconfig.attach_hid = -1;
-	clconfig.attach_mouse_as_hid = -1;
-	clconfig.attach_kbd_as_hid = -1;
 	clconfig.strip_report_id = -1;
 }
 
@@ -336,34 +312,6 @@ config_attach_hid(struct hid_parent *hp)
 		return (clconfig.attach_hid);
 
 	return (uconfig.gconfig.attach_hid);
-}
-
-int
-config_attach_mouse_as_hid(struct hid_parent *hp)
-{
-	struct device_config *dc;
-
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
-		return (dc->attach_mouse_as_hid);
-	if (clconfig.attach_mouse_as_hid != -1)
-		return (clconfig.attach_mouse_as_hid);
-
-	return (uconfig.gconfig.attach_mouse_as_hid);
-}
-
-int
-config_attach_kbd_as_hid(struct hid_parent *hp)
-{
-	struct device_config *dc;
-
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
-		return (dc->attach_kbd_as_hid);
-	if (clconfig.attach_kbd_as_hid != -1)
-		return (clconfig.attach_kbd_as_hid);
-
-	return (uconfig.gconfig.attach_kbd_as_hid);
 }
 
 int

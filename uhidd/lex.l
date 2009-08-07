@@ -51,8 +51,6 @@ AttachMouse		{ return (T_ATTACHMOUSE); }
 AttachKeyboard		{ return (T_ATTACHKEYBOARD); }
 AttachHID		{ return (T_ATTACHHID); }
 DetachKernelDriver	{ return (T_DETACHKERNELDRIVER); }
-AttachMouseAsHID	{ return (T_ATTACHMOUSEASHID); }
-AttachKeyboardAsHID	{ return (T_ATTACHKEYBOARDASHID); }
 StripReportID		{ return (T_STRIPREPORTID); }
 global			{ return (T_GLOBAL); }
 
