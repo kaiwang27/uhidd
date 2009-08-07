@@ -121,8 +121,7 @@ main(int argc, char **argv)
 		usage();
 
 	if (config_read_file() < 0)
-		syslog(LOG_WARNING, "Unable to read config file: %s",
-		    config_file);
+		syslog(LOG_WARNING, "proceed without configuration file");
 
 	if (detach) {
 		if (daemon(0, 0) < 0) {
