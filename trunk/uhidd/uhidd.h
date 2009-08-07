@@ -137,8 +137,6 @@ struct device_config {
 	int attach_kbd;
 	int attach_hid;
 	int detach_kernel_driver;
-	int attach_mouse_as_hid;
-	int attach_kbd_as_hid;
 	int strip_report_id;
 	STAILQ_HEAD(, hidaction_config) halist;
 	STAILQ_ENTRY(device_config) next;
@@ -347,8 +345,6 @@ struct device_config *config_find_device(int, int, int);
 int		config_attach_mouse(struct hid_parent *);
 int		config_attach_kbd(struct hid_parent *);
 int		config_attach_hid(struct hid_parent *);
-int		config_attach_mouse_as_hid(struct hid_parent *)
-;int		config_attach_kbd_as_hid(struct hid_parent *);
 void		config_init(void);
 int		config_read_file(void);
 int		config_strip_report_id(struct hid_parent *);
