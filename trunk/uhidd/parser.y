@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD$");
 #include <errno.h>
 #include <stdio.h>
 #include <stdio.h>
+#include <syslog.h>
 
 #include "uhidd.h"
 
@@ -40,7 +41,7 @@ extern int yyparse(void);
 extern int lineno;
 extern FILE *yyin;
 
-const char *config_file = "uhidd.conf";
+const char *config_file = "/usr/local/etc/uhidd.conf";
 struct uhidd_config uconfig;
 struct device_config clconfig;
 
@@ -236,8 +237,9 @@ yyerror(const char *s)
 {
 
 	(void) s;
-	fprintf(stderr, "Syntax error in config file %s, line %d\n",
+	syslog(LOG_ERR, "Syntax error in config file %s, line %d\n",
 	    config_file, lineno);
+	syslog(LOG_ERR, "Aborting...");
 	exit(1);
 }
 
@@ -266,7 +268,7 @@ config_read_file(void)
 	int r;
 
 	if ((yyin = fopen(config_file, "r")) == NULL) {
-		fprintf(stderr, "open %s failed: %s", config_file,
+		syslog(LOG_WARNING, "open %s failed: %s", config_file,
 		    strerror(errno));
 		return (-1);
 	}
