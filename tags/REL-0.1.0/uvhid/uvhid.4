@@ -1,0 +1,139 @@
+.\" Copyright (c) 2009 Kai Wang
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $FreeBSD$
+.\"
+.Dd August 3, 2009
+.Dt UVHID 4
+.Os
+.Sh NAME
+.Nm uvhid
+.Nd Virtual USB generic HID support
+.Sh SYNOPSIS
+To load the driver as a modules at boot time, place the follwing line in
+.Xr loader.conf 5 :
+.Bd -literal -offset indent
+uvhid_load="YES"
+.Ed
+.Sh DESCRIPTION
+The
+.Nm
+driver is a software loopback mechanism that is used by userland
+applications to simulate physical USB generic hid devices.
+.Pp
+The 
+.Nm
+driver provides two character-special devices: a "control" device
+and the simulated USB generic hid device.
+.Pp
+The usb hid applications like
+.Xr usbhidaction 1
+should open the simulated USB generic hid device (normally
+.Pa /dev/uvhid Ns Aq Ar N )
+and treat it like a real
+.Xr uhid 4
+device.
+.Pp
+The application that wants to simulate a physical generic hid device
+opens the control device (normally
+.Pa /dev/uvhidctl Ns Aq Ar N )
+,
+.Xr write 2
+hid report data to the device, and the data will appear on the other side
+(the simulated hid device) as if it is produced by a physical device.
+Likewise, data written to the simulated hid device could be later
+.Xr read 2
+from the control device.
+.Pp
+The simulated hid device support following
+.Xr ioctl 2
+calls:
+.Bl -tag -width indent
+.It Dv USB_GET_REPORT_ID Pq Vt int
+Get the report id used by this HID report. Note that this ioctl
+is broken by design, since a hid device interface could have
+more than one report ID.
+.It Dv USB_GET_REPORT_DESC Pq Vt "struct usb_gen_descriptor"
+Get the HID report descriptor. The returned descriptor will be
+stored in the user provided buffer pointed to by
+.Vt ugd_data
+and the actual length of the descriptor
+in
+.Vt ugd_actlen.
+.Bd -literal
+struct usb_gen_descriptor {
+	void   *ugd_data;
+	uint16_t ugd_lang_id;
+	uint16_t ugd_maxlen;
+	uint16_t ugd_actlen;
+	uint16_t ugd_offset;
+	uint8_t	ugd_config_index;
+	uint8_t	ugd_string_index;
+	uint8_t	ugd_iface_index;
+	uint8_t	ugd_altif_index;
+	uint8_t	ugd_endpt_index;
+	uint8_t	ugd_report_type;
+	uint8_t	reserved[8];
+};
+.Ed
+.El
+.Pp
+.Bl -tag -width indent -compact
+.It Dv USB_SET_IMMED Pq Vt int
+.It Dv USB_GET_REPORT Pq Vt "struct usb_gen_descriptor"
+.It Dv USG_SET_REPORT Pq Vt "struct usb_gen_descriptor"
+These commands are not supported by the
+.Nm
+driver.
+.El
+.Pp
+The control device support following
+.Xr ioctl 2
+calls:
+.Bl -tag -width indent
+.It Dv USB_SET_REPORT_ID Pq Vt int
+Set the report id used by this HID report. This value will be
+returned by the USB_GET_REPORT_ID command of the simulated hid
+device.
+.It Dv USB_SET_REPORT_DESC Pq Vt "struct usb_gen_descriptor"
+Set the HID report descriptor.
+This descriptor will be returned by the USB_GET_REPORT_DESC
+command of the simulated hid device.
+.Vt ugd_data
+should point to the buffer of the report descriptor, and
+.Vt ugd_actlen
+should be set to the length of the descriptor.
+.El
+.Sh FILES
+.Bl -tag -width indent -compact
+.It Pa /dev/uvhid Ns Aq Ar N
+.It Pa /dev/uvhidctl Ns Aq Ar N
+.El
+.Sh SEE ALSO
+.Xr usbhidaction 1 ,
+.Xr uhid 4 ,
+.Xr usb 4 ,
+.Xr uhidd 8
+.Sh AUTHORS
+.An Kai Wang Aq kaiw@FreeBSD.org
