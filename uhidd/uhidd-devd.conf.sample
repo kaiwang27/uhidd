@@ -1,4 +1,4 @@
 attach 0 {
 	match "device-name" "ugen[0-9]+.[0-9]+";
-	action "/usr/local/bin/uhidd -kmhs /dev/$device-name"
+	action "/usr/local/bin/uhidd -kmhs /dev/$device-name";
 };
