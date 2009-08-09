@@ -884,6 +884,6 @@ static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: uhidd [-cdhkKmMuv] /dev/ugen%%u.%%u\n");
+	fprintf(stderr, "usage: uhidd [-cdhkmuv] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
