@@ -23,7 +23,7 @@ pidprefix="/var/run/uhidd"
 load_rc_config $name
 
 if [ -n "$2" ]; then
-	pidfile="${pidprefix}.$2.pid"
+	pidfile="${pidprefix}.`basename $2`.pid"
 else
 	pidfile=
 fi

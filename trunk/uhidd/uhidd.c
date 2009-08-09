@@ -35,6 +35,7 @@ __FBSDID("$FreeBSD $");
 #include <dev/usb/usbhid.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <libusb20.h>
 #include <libusb20_desc.h>
 #include <pthread.h>
@@ -68,6 +69,8 @@ main(int argc, char **argv)
 {
 	struct hid_parent *hp;
 	struct libusb20_backend *backend;
+	FILE *pid;
+	char *pid_file;
 	int opt;
 
 	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
@@ -122,6 +125,19 @@ main(int argc, char **argv)
 		}
 	}
 
+	/*
+	 * Write pid file.
+	 */
+	if (asprintf(&pid_file, "/var/run/uhidd.%s.pid", basename(*argv)) < 0) {
+		syslog(LOG_ERR, "asprintf failed: %m");
+		exit(1);
+	}
+	if ((pid = fopen(pid_file, "w")) == NULL) {
+		syslog(LOG_ERR, "fopen %s failed: %m", pid_file);
+		exit(1);
+	}
+	fprintf(pid, "%d", getpid());
+	fclose(pid);
 
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
@@ -144,6 +160,13 @@ main(int argc, char **argv)
 		if (!STAILQ_EMPTY(&hp->hclist))
 			pthread_join(hp->thread, NULL);
 	}
+
+	/* Remove pid file. */
+	if (unlink(pid_file) < 0) {
+		syslog(LOG_ERR, "unlink %s failed: %m", pid_file);
+		exit(1);
+	}
+	free(pid_file);
 
 	syslog(LOG_NOTICE, "terminated\n");
 
