@@ -183,6 +183,7 @@ struct kbd_data {
 #define	MOD_WIN_R	0x80
 
 	uint8_t keycode[MAX_KEYCODE];
+	uint32_t time[MAX_KEYCODE];
 };
 
 struct kbd_dev {
@@ -192,6 +193,14 @@ struct kbd_dev {
 	int key_cnt;
 	struct kbd_data ndata;
 	struct kbd_data odata;
+	pthread_t kbd_task;
+	pthread_mutex_t kbd_mtx;
+	uint32_t now;
+	int delay1;
+	int delay2;
+
+#define KB_DELAY1	500
+#define KB_DELAY2	100
 };
 
 /*
