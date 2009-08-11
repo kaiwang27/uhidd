@@ -447,7 +447,8 @@ kbd_process_keys(struct hid_child *hc)
 			}
 		}
 		kbd_write(hc, key, 0);
-	rfound:	;
+	rfound:
+		;
 	}
 
 	/* Check for pressed keys. */
