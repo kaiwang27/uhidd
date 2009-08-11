@@ -74,6 +74,7 @@ __FBSDID("$FreeBSD $");
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,7 +83,9 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
-#define	KBD	hc->u.kd
+#define	KBD		hc->u.kd
+#define KBD_LOCK	pthread_mutex_lock(&KBD.kbd_mtx);
+#define KBD_UNLOCK	pthread_mutex_unlock(&KBD.kbd_mtx);
 
 /*
  * HID code to PS/2 set 1 code translation table.
@@ -359,6 +362,10 @@ static struct kbd_mods kbd_mods[KBD_NMOD] = {
 	{MOD_WIN_R, 0xe7},
 };
 
+static void	*kbd_task(void *arg);
+static void	kbd_write(struct hid_child *hc, int hid_key, int make);
+static void	kbd_process_keys(struct hid_child *hc);
+
 /*
  * Translate HID code into PS/2 code and put codes into buffer b.
  * Returns the number of codes put in b.
@@ -411,7 +418,7 @@ kbd_process_keys(struct hid_child *hc)
 	uint32_t n_mod;
 	uint32_t o_mod;
 	uint8_t key;
-	int i, j;
+	int dtime, i, j;
 
 	n_mod = KBD.ndata.mod;
 	o_mod = KBD.odata.mod;
@@ -449,23 +456,22 @@ kbd_process_keys(struct hid_child *hc)
 		if (key == 0) {
 			continue;
 		}
-/* 		sc->sc_ntime[i] = now + sc->sc_kbd.kb_delay1; */
+		KBD.ndata.time[i] = KBD.now + KBD.delay1;
 		for (j = 0; j < KBD.key_cnt; j++) {
 			if (KBD.odata.keycode[j] == 0) {
 				continue;
 			}
 			if (key == KBD.odata.keycode[j]) {
-
-				/* key is still pressed */
-
-/* 				sc->sc_ntime[i] = sc->sc_otime[j]; */
-/* 				dtime = (sc->sc_otime[j] - now); */
-
-/* 				if (!(dtime & 0x80000000)) { */
-/* 					/\* time has not elapsed *\/ */
-/* 					goto pfound; */
-/* 				} */
-/* 				sc->sc_ntime[i] = now + sc->sc_kbd.kb_delay2; */
+				/*
+				 * Key is still pressed.
+				 */
+				KBD.ndata.time[i] = KBD.odata.time[j];
+				dtime = (KBD.odata.time[j] - KBD.now);
+				if (!(dtime & 0x80000000)) {
+					/* time has not elapsed */
+					goto pfound;
+				}
+				KBD.ndata.time[i] = KBD.now + KBD.delay2;
 				break;
 			}
 		}
@@ -476,11 +482,12 @@ kbd_process_keys(struct hid_child *hc)
                  * well in the future (100s).  This makes the last key to be
                  * pressed do the autorepeat.
                  */
-/* 		for (j = 0; j != UKBD_NKEYCODE; j++) { */
-/* 			if (j != i) */
-/* 				sc->sc_ntime[j] = now + (100 * 1000); */
-/* 		} */
-/* 	pfound:	; */
+		for (j = 0; j < KBD.key_cnt; j++) {
+			if (j != i)
+				KBD.ndata.time[j] = KBD.now + (100 * 1000);
+		}
+	pfound:
+		;
 	}
 
 	KBD.odata = KBD.ndata;
@@ -501,7 +508,7 @@ kbd_attach(struct hid_child *hc)
 		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
 		if (verbose && errno == ENOENT)
-			PRINT2("vkbd.ko kernel moduel not loaded?\n")
+			PRINT2("vkbd.ko kernel module not loaded?\n")
 		return (-1);
 	}
 
@@ -535,6 +542,13 @@ kbd_attach(struct hid_child *hc)
 
 	KBD.key_cnt = KBD.keys.report_count;
 
+	/* TODO: These should be tunable. */
+	KBD.delay1 = KB_DELAY1;
+	KBD.delay2 = KB_DELAY2;
+
+	pthread_mutex_init(&KBD.kbd_mtx, NULL);
+	pthread_create(&KBD.kbd_task, NULL, kbd_task, hc);
+
 	return (0);
 }
 
@@ -549,6 +563,7 @@ kbd_recv(struct hid_child *hc, char *buf, int len)
 	hp = hc->parent;
 	assert(hp != NULL);
 
+	KBD_LOCK;
 	KBD.ndata.mod = (uint8_t) hid_get_data(buf, &KBD.mods);
 	cnt = hid_get_array8(buf, KBD.ndata.keycode, &KBD.keys);
 	if (verbose) {
@@ -557,6 +572,24 @@ kbd_recv(struct hid_child *hc, char *buf, int len)
 			printf(" %d", KBD.ndata.keycode[i]);
 		putchar('\n');
 	}
+	KBD_UNLOCK;
+}
 
-	kbd_process_keys(hc);
+static void *
+kbd_task(void *arg)
+{
+	struct hid_child *hc;
+
+	hc = arg;
+	assert(hc != NULL);
+
+	
+	for (KBD.now = 0; ; KBD.now += 25) {
+		KBD_LOCK;
+		kbd_process_keys(hc);
+		KBD_UNLOCK;
+		usleep(25 * 1000);	/* wake up every 25ms. */
+	}
+
+	return (NULL);
 }
