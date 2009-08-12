@@ -153,7 +153,8 @@ main(int argc, char **argv)
 	libusb20_be_free(backend);
 
 	if (STAILQ_EMPTY(&hplist))
-		exit(0);
+		goto uhidd_end;
+
 	STAILQ_FOREACH(hp, &hplist, next) {
 		if (!STAILQ_EMPTY(&hp->hclist))
 		    pthread_create(&hp->thread, NULL, start_hid_parent,
@@ -164,6 +165,7 @@ main(int argc, char **argv)
 			pthread_join(hp->thread, NULL);
 	}
 
+uhidd_end:
 	/* Remove pid file. */
 	if (unlink(pid_file) < 0) {
 		syslog(LOG_ERR, "unlink %s failed: %m", pid_file);
