@@ -115,8 +115,11 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
-	if (config_read_file() < 0)
-		syslog(LOG_WARNING, "proceed without configuration file");
+	if (config_read_file() < 0) {
+		if (verbose)
+			syslog(LOG_WARNING, "proceed without configuration"
+			    " file");
+	}
 
 	if (detach) {
 		if (daemon(0, 0) < 0) {

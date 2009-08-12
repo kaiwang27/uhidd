@@ -244,8 +244,9 @@ config_read_file(void)
 	int r;
 
 	if ((yyin = fopen(config_file, "r")) == NULL) {
-		syslog(LOG_WARNING, "open %s failed: %s", config_file,
-		    strerror(errno));
+		if (verbose)
+			syslog(LOG_WARNING, "open %s failed: %s", config_file,
+			    strerror(errno));
 		return (-1);
 	}
 
