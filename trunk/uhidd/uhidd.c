@@ -52,9 +52,9 @@ static int detach = 1;
 static STAILQ_HEAD(, hid_parent) hplist;
 
 static void	usage(void);
-static void	find_and_attach(struct libusb20_backend *backend,
+static int	find_and_attach(struct libusb20_backend *backend,
 		    const char *dev);
-static void	attach_dev(const char *dev, struct libusb20_device *pdev);
+static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
@@ -71,7 +71,9 @@ main(int argc, char **argv)
 	struct libusb20_backend *backend;
 	FILE *pid;
 	char *pid_file;
-	int opt;
+	int eval, opt;
+
+	eval = 0;
 
 	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
 
@@ -145,11 +147,17 @@ main(int argc, char **argv)
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
 		syslog(LOG_ERR, "can not alloc backend");
-		exit(1);
+		eval = 1;
+		goto uhidd_end;
 	}
 
 	STAILQ_INIT(&hplist);
-	find_and_attach(backend, *argv);
+
+	if (find_and_attach(backend, *argv) < 0) {
+		eval = 1;
+		goto uhidd_end;
+	}
+
 	libusb20_be_free(backend);
 
 	if (STAILQ_EMPTY(&hplist))
@@ -169,37 +177,46 @@ uhidd_end:
 	/* Remove pid file. */
 	if (unlink(pid_file) < 0) {
 		syslog(LOG_ERR, "unlink %s failed: %m", pid_file);
-		exit(1);
+		eval = 1;
 	}
+
 	free(pid_file);
 
 	syslog(LOG_NOTICE, "terminated\n");
 
-	exit(0);
+	exit(eval);
 }
 
-static void
+static int
 find_and_attach(struct libusb20_backend *backend, const char *dev)
 {
-	struct libusb20_device *pdev;
+     struct libusb20_device *pdev;
 	unsigned int bus, addr;
 
 	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
 		syslog(LOG_ERR, "%s not found", dev);
-		exit(1);
+		return (-1);
 	}
 
 	pdev = NULL;
 	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
 		if (bus == libusb20_dev_get_bus_number(pdev) &&
 		    addr == libusb20_dev_get_address(pdev)) {
-			attach_dev(dev, pdev);
+			if (attach_dev(dev, pdev) < 0)
+				return (-1);
 			break;
 		}
 	}
+
+	if (pdev == NULL) {
+		syslog(LOG_ERR, "%s not found", dev);
+		return (-1);
+	}
+
+	return (0);
 }
 
-static void
+static int
 attach_dev(const char *dev, struct libusb20_device *pdev)
 {
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
@@ -210,7 +227,7 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	e = libusb20_dev_open(pdev, 32);
 	if (e != 0) {
 		syslog(LOG_ERR, "libusb20_dev_open %s failed", dev);
-		return;
+		return (-1);
 	}
 
 	/*
@@ -220,7 +237,7 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	config = libusb20_dev_alloc_config(pdev, cndx);
 	if (config == NULL) {
 		syslog(LOG_ERR, "Can not alloc config for %s", dev);
-		return;
+		return (-1);
 	}
 
 	ddesc = libusb20_dev_get_device_desc(pdev);
@@ -238,6 +255,8 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 	}
 
 	free(config);
+
+	return (0);
 }
 
 static void
