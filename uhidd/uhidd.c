@@ -34,10 +34,13 @@ __FBSDID("$FreeBSD $");
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
 #include <assert.h>
+#include <err.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <libusb20.h>
 #include <libusb20_desc.h>
+#include <libutil.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +52,7 @@ __FBSDID("$FreeBSD $");
 int verbose = 0;
 
 static int detach = 1;
+static struct pidfh *pfh = NULL;
 static STAILQ_HEAD(, hid_parent) hplist;
 
 static void	usage(void);
@@ -62,15 +66,17 @@ static int	attach_hid_child(struct hid_child *hc);
 static void	child_recv(struct hid_child *hc, char *buf, int len);
 static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
+static void	sighandler(int sig __unused);
 static void	*start_hid_parent(void *arg);
+static void	terminate(int eval);
 
 int
 main(int argc, char **argv)
 {
 	struct hid_parent *hp;
 	struct libusb20_backend *backend;
-	FILE *pid;
 	char *pid_file;
+	pid_t otherpid;
 	int eval, opt;
 
 	eval = 0;
@@ -117,6 +123,22 @@ main(int argc, char **argv)
 	if (*argv == NULL)
 		usage();
 
+	/* Check that another uhidd isn't already attached to the device. */
+	if (asprintf(&pid_file, "/var/run/uhidd.%s.pid", basename(*argv)) < 0) {
+		syslog(LOG_ERR, "asprintf failed: %m");
+		exit(1);
+	}
+	pfh = pidfile_open(pid_file, 0600, &otherpid);
+	if (pfh == NULL) {
+		if (errno == EEXIST) {
+			syslog(LOG_ERR, "uhidd already running on %s, pid: %d.",
+			    *argv, otherpid);
+			exit(1);
+		}
+		syslog(LOG_WARNING, "cannot open or create pidfile");
+	}
+	free(pid_file);
+
 	if (config_read_file() < 0) {
 		if (verbose)
 			syslog(LOG_WARNING, "proceed without configuration"
@@ -130,19 +152,11 @@ main(int argc, char **argv)
 		}
 	}
 
-	/*
-	 * Write pid file.
-	 */
-	if (asprintf(&pid_file, "/var/run/uhidd.%s.pid", basename(*argv)) < 0) {
-		syslog(LOG_ERR, "asprintf failed: %m");
-		exit(1);
-	}
-	if ((pid = fopen(pid_file, "w")) == NULL) {
-		syslog(LOG_ERR, "fopen %s failed: %m", pid_file);
-		exit(1);
-	}
-	fprintf(pid, "%d", getpid());
-	fclose(pid);
+	signal(SIGTERM, sighandler);
+	signal(SIGINT, sighandler);
+
+	/* Write pid file. */
+	pidfile_write(pfh);
 
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
@@ -174,17 +188,26 @@ main(int argc, char **argv)
 	}
 
 uhidd_end:
-	/* Remove pid file. */
-	if (unlink(pid_file) < 0) {
-		syslog(LOG_ERR, "unlink %s failed: %m", pid_file);
-		eval = 1;
-	}
 
-	free(pid_file);
+	terminate(eval);
+}
 
+static void
+terminate(int eval)
+{
+
+	pidfile_remove(pfh);
 	syslog(LOG_NOTICE, "terminated\n");
 
 	exit(eval);
+}
+
+/* ARGSUSED */
+static void
+sighandler(int sig __unused)
+{
+
+	terminate(1);
 }
 
 static int
@@ -647,6 +670,7 @@ attach_hid_child(struct hid_child *hc)
 	 */
 
 	p = hid_parser_alloc(hc->rdesc, hc->rsz);
+	hc->p = p;
 	hc->nr = p->nr;
 	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
 
@@ -677,10 +701,9 @@ attach_hid_child(struct hid_child *hc)
 			    hid_report_size(p, hid_feature, hc->rid[i]));
 		if (verbose > 2) {
 			dump_report_desc(hc->rdesc, hc->rsz);
-			hexdump(hc->rdesc, hc->rsz);
+			hexdump_report_desc(hc->rdesc, hc->rsz);
 		}
 	}
-	hc->p = p;
 
 	/*
 	 * Device type specific attachment.

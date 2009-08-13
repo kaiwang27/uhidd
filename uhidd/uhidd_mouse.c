@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD $");
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <unistd.h>
 #include "uhidd.h"
 
 int

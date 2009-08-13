@@ -409,7 +409,7 @@ kbd_write(struct hid_child *hc, int hid_key, int make)
 	}
 
 	if (n > 0)
-		write(KBD.vkbd_fd, buf, n * sizeof(buf[0]));	
+		write(KBD.vkbd_fd, buf, n * sizeof(buf[0]));
 }
 
 static void
@@ -576,6 +576,15 @@ kbd_recv(struct hid_child *hc, char *buf, int len)
 	KBD_UNLOCK;
 }
 
+void
+kbd_cleanup(struct hid_child *hc)
+{
+
+	KBD.ndata.mod = 0;
+	memset(KBD.ndata.keycode, 0, sizeof(KBD.ndata.keycode));
+	kbd_process_keys(hc);
+}
+
 static void *
 kbd_task(void *arg)
 {
@@ -584,7 +593,6 @@ kbd_task(void *arg)
 	hc = arg;
 	assert(hc != NULL);
 
-	
 	for (KBD.now = 0; ; KBD.now += 25) {
 		KBD_LOCK;
 		kbd_process_keys(hc);

@@ -62,7 +62,7 @@ static int upage;
 } while (0)
 
 void
-hexdump(unsigned char *rdesc, int size)
+hexdump_report_desc(unsigned char *rdesc, int size)
 {
 	unsigned char *p;
 	int i;
