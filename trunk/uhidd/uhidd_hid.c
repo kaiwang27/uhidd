@@ -107,7 +107,7 @@ hid_attach(struct hid_child *hc)
 	if (hc->nr == 0)
 		rid = 0;
 	else
-		rid = hc->rid[0];
+	rid = hc->rid[0];
 
 	if (ioctl(hc->u.hd.hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> "

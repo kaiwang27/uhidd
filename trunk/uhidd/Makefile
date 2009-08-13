@@ -9,8 +9,8 @@ MAN=		uhidd.8
 
 WARNS?=	6
 
-DPADD=	${LIBUSB} ${LIBPTHREAD}
-LDADD=	-lusb -lpthread
+DPADD=	${LIBUSB} ${LIBPTHREAD} ${LIBUTIL}
+LDADD=	-lusb -lpthread -lutil
 
 CFLAGS+=-I. -I${.CURDIR} -g
 
