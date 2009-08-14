@@ -278,25 +278,27 @@ hidctl_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 {
 	struct uvhid_softc *sc = dev->si_drv1;
 	struct usb_gen_descriptor *ugd;
+	unsigned char rdesc[UVHID_MAX_REPORT_DESC_SIZE];
 	int err;
 
 	err = 0;
 
 	switch (cmd) {
 	case USB_SET_REPORT_DESC:
-		UVHID_LOCK(sc);
+
 		ugd = (struct usb_gen_descriptor *)data;
-		if (ugd->ugd_actlen == 0) {
-			UVHID_UNLOCK(sc);
+		if (ugd->ugd_actlen == 0)
 			break;
-		}
 		if (ugd->ugd_actlen > UVHID_MAX_REPORT_DESC_SIZE) {
-			UVHID_UNLOCK(sc);
 			err = ENXIO;
 			break;
 		}
+		err = copyin(ugd->ugd_data, rdesc, ugd->ugd_actlen);
+		if (err)
+			break;
+		UVHID_LOCK(sc);
+		bcopy(rdesc, sc->us_rdesc, ugd->ugd_actlen);
 		sc->us_rsz = ugd->ugd_actlen;
-		err = copyin(ugd->ugd_data, sc->us_rdesc, ugd->ugd_actlen);
 		UVHID_UNLOCK(sc);
 		break;
 
@@ -376,6 +378,7 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 {
 	struct uvhid_softc *sc = dev->si_drv1;
 	struct usb_gen_descriptor *ugd;
+	unsigned char rdesc[UVHID_MAX_REPORT_DESC_SIZE];
 	int err;
 
 	err = 0;
@@ -389,8 +392,9 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 			UVHID_UNLOCK(sc);
 			break;
 		}
-		err = copyout(sc->us_rdesc, ugd->ugd_data, ugd->ugd_actlen);
+		bcopy(sc->us_rdesc, rdesc, ugd->ugd_actlen);
 		UVHID_UNLOCK(sc);
+		err = copyout(rdesc, ugd->ugd_data, ugd->ugd_actlen);
 		break;
 
 	case USB_SET_IMMED:
