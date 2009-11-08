@@ -131,7 +131,7 @@ hid_recv(struct hid_child *hc, char *buf, int len)
 	if (verbose) {
 		PRINT2("%s received data:", hc->u.hd.name);
 		for (i = 0; i < len; i++)
-			printf(" %d", buf[i]);
+			printf(" %u", (unsigned char) buf[i]);
 		putchar('\n');
 	}
 
