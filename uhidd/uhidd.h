@@ -114,6 +114,22 @@ struct hid_data {
 
 typedef struct hid_data *hid_data_t;
 
+struct hid_field {
+	int hf_pos;
+	int hf_count;
+	int hf_size;
+	int hf_type;
+	int hf_usage;
+	int hf_value;
+	STAILQ_ENTRY(hid_field) hf_next;
+};
+
+struct hid_report {
+	int hr_id;
+	STAILQ_HEAD(, hid_field) hr_hflist;
+	STAILQ_ENTRY(hid_report) hr_next;
+};
+
 /*
  * Configuration.
  */
@@ -264,6 +280,7 @@ struct hid_child {
 		struct kbd_dev kd;
 		struct hid_dev hd;
 	} u;
+	STAILQ_HEAD(, hid_report) hrlist;
 	STAILQ_HEAD(, hidaction) halist;
 	STAILQ_ENTRY(hid_child)	 next;
 };
