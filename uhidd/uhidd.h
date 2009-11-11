@@ -1,8 +1,6 @@
 /*-
  * Copyright (c) 2009 Kai Wang
  * All rights reserved.
- * Copyright (c) 1999 Lennart Augustsson <augustss@netbsd.org>
- * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,30 +34,25 @@
 
 #define _MAX_RDESC_SIZE	16384
 #define _MAX_REPORT_IDS	256
-#define MAXUSAGE 100
+#define MAXUSAGE 4096
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
 
-struct hid_parser {
-	unsigned char		 rdesc[_MAX_RDESC_SIZE];
-	int			 rsz;
-	int			 rid[_MAX_REPORT_IDS];
-	int			 nr;
+/*
+ * HID Main item kind.
+ */
+enum hid_kind {
+	HID_INPUT = 0,
+	HID_OUTPUT,
+	HID_FEATURE
 };
 
-typedef struct hid_parser *hid_parser_t;
-
-typedef enum hid_kind {
-	hid_input = 0,
-	hid_output = 1,
-	hid_feature = 2,
-	hid_collection,
-	hid_endcollection
-} hid_kind_t;
-
-typedef struct hid_item {
+/*
+ * HID item state table.
+ */
+struct hid_state {
 	/* Global */
-	unsigned int _usage_page;
+	unsigned int usage_page;
 	int logical_minimum;
 	int logical_maximum;
 	int physical_minimum;
@@ -67,9 +60,8 @@ typedef struct hid_item {
 	int unit_exponent;
 	int unit;
 	int report_size;
-	int report_ID;
-#define NO_REPORT_ID 0
 	int report_count;
+
 	/* Local */
 	unsigned int usage;
 	int usage_minimum;
@@ -81,54 +73,49 @@ typedef struct hid_item {
 	int string_minimum;
 	int string_maximum;
 	int set_delimiter;
-	/* Misc */
-	int collection;
-	int collevel;
-	enum hid_kind kind;
-	unsigned int flags;
-	/* Absolute data position (bits) */
-	unsigned int pos;
-	/* */
-	struct hid_item *next;
-} hid_item_t;
 
-struct hid_data {
-	u_char *start;
-	u_char *end;
-	u_char *p;
-	hid_item_t cur;
-	unsigned int usages[MAXUSAGE];
-	int nusage;
-	int minset;
-	int logminsize;
-	int multi;
-	int multimax;
-	int kindset;
-	/*
-	 * Absolute data position (bits) for input/output/feature of each
-	 * report id. Assumes that hid_input, hid_output and hid_feature have
-	 * values 0, 1 and 2.
-	 */
-	unsigned int kindpos[_MAX_REPORT_IDS][3];
+	struct hid_state *stack_next;
 };
 
-typedef struct hid_data *hid_data_t;
-
 struct hid_field {
+	int hf_flags;
 	int hf_pos;
 	int hf_count;
 	int hf_size;
 	int hf_type;
-	int hf_usage;
-	int hf_value;
+	int hf_usage_min;
+	int hf_usage_max;
+	unsigned int *hf_usage;
+	int *hf_value;
 	STAILQ_ENTRY(hid_field) hf_next;
 };
 
 struct hid_report {
 	int hr_id;
-	STAILQ_HEAD(, hid_field) hr_hflist;
+	unsigned int hr_pos[3];
+	STAILQ_HEAD(, hid_field) hr_ihflist; /* Input field list. */
+	STAILQ_HEAD(, hid_field) hr_ohflist; /* Output field list. */
+	STAILQ_HEAD(, hid_field) hr_fhflist; /* Feature field list. */
 	STAILQ_ENTRY(hid_report) hr_next;
 };
+
+/* HID application collection. */
+struct hid_appcol {
+	unsigned int ha_usage;
+	struct hid_driver *hd;
+	STAILQ_HEAD(, hid_report) ha_hrlist;
+	STAILQ_ENTRY(hid_appcol) ha_next;
+};
+
+struct hid_parser {
+	unsigned char		 rdesc[_MAX_RDESC_SIZE];
+	int			 rsz;
+	int			 rid[_MAX_REPORT_IDS];
+	int			 nr;
+	STAILQ_HEAD(, hid_appcol) halist;
+};
+
+typedef struct hid_parser *hid_parser_t;
 
 /*
  * Configuration.
@@ -164,6 +151,7 @@ struct uhidd_config {
 	STAILQ_HEAD(, device_config) dclist;
 };
 
+#if 0
 /*
  * Mouse device.
  */
@@ -228,6 +216,15 @@ struct hid_dev {
 	char *name;
 };
 
+struct hidaction {
+	struct hidaction_config *conf;
+	hid_item_t item;
+	int lastseen;
+	int lastused;
+	STAILQ_ENTRY(hidaction) next;
+};
+#endif
+
 /*
  * HID parent and child data structures.
  */
@@ -236,14 +233,6 @@ enum uhidd_ctype {
 	UHIDD_MOUSE,
 	UHIDD_KEYBOARD,
 	UHIDD_HID
-};
-
-struct hidaction {
-	struct hidaction_config *conf;
-	hid_item_t item;
-	int lastseen;
-	int lastused;
-	STAILQ_ENTRY(hidaction) next;
 };
 
 struct hid_child;
@@ -273,13 +262,17 @@ struct hid_child {
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
+#if 0
 	hid_item_t		 env;
+#endif
 	hid_parser_t		 p;
+#if 0
 	union {
 		struct mouse_dev md;
 		struct kbd_dev kd;
 		struct hid_dev hd;
 	} u;
+#endif
 	STAILQ_HEAD(, hid_report) hrlist;
 	STAILQ_HEAD(, hidaction) halist;
 	STAILQ_ENTRY(hid_child)	 next;
@@ -353,6 +346,7 @@ hid_parser_t	hid_parser_alloc(unsigned char *, int);
 void		hid_parser_free(hid_parser_t);
 int		hid_get_report_id_num(hid_parser_t);
 void		hid_get_report_ids(hid_parser_t, int *, int);
+#if 0
 hid_data_t	hid_start_parse(hid_parser_t, int);
 void		hid_end_parse(hid_data_t);
 int		hid_get_item(hid_data_t, hid_item_t *, int);
@@ -362,6 +356,7 @@ int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
 int		hid_get_data(const void *, const hid_item_t *);
 int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
+#endif
 int		kbd_attach(struct hid_child *);
 void		kbd_cleanup(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);

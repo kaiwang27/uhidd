@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 #include <sys/param.h>
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
+#include <assert.h>
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,9 +40,12 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 
 #include "uhidd.h"
 
-static void	hid_clear_local(hid_item_t *c);
+static void	hid_clear_local(struct hid_state *c);
 static void	hid_parser_init(hid_parser_t p);
+static void	hid_parser_dump(hid_parser_t p);
+#if 0
 static int	hid_get_item_raw(hid_data_t s, hid_item_t *h);
+#endif
 
 static int
 min(int x, int y)
@@ -60,6 +64,7 @@ hid_parser_alloc(unsigned char *rdesc, int rsz)
 		err(1, "calloc");
 	memcpy(p->rdesc, rdesc, rsz);
 	p->rsz = rsz;
+	STAILQ_INIT(&p->halist);
 	hid_parser_init(p);
 
 	return (p);
@@ -88,6 +93,7 @@ hid_get_report_ids(hid_parser_t p, int *rid, int size)
 	memcpy(rid, p->rid, s*sizeof(int));
 }
 
+#if 0
 static void
 hid_parser_init(hid_parser_t p)
 {
@@ -147,22 +153,447 @@ hid_parser_init(hid_parser_t p)
 		}
 	}
 }
+#endif
 
-static void
-hid_clear_local(hid_item_t *c)
+static struct hid_state *
+hid_new_state(void)
 {
-	c->usage = 0;
-	c->usage_minimum = 0;
-	c->usage_maximum = 0;
-	c->designator_index = 0;
-	c->designator_minimum = 0;
-	c->designator_maximum = 0;
-	c->string_index = 0;
-	c->string_minimum = 0;
-	c->string_maximum = 0;
-	c->set_delimiter = 0;
+
+	return (calloc(1, sizeof(struct hid_state)));
 }
 
+static struct hid_state *
+hid_push_state(struct hid_state *cur_hs)
+{
+	struct hid_state *hs;
+
+	assert(cur_hs != NULL);
+	if ((hs = hid_new_state()) == NULL)
+		return (NULL);
+
+	*hs = *cur_hs;
+	hs->stack_next = cur_hs;
+
+	return (hs);
+}
+
+static struct hid_state *
+hid_pop_state(struct hid_state *cur_hs)
+{
+	struct hid_state *hs;
+
+	assert(cur_hs != NULL);
+	hs = cur_hs->stack_next;
+	free(cur_hs);
+
+	return (hs);
+}
+
+static struct hid_appcol *
+hid_add_appcol(hid_parser_t p, unsigned int usage)
+{
+	struct hid_appcol *ha;
+
+	assert(p != NULL);
+	
+	if ((ha = calloc(1, sizeof(*ha))) == NULL)
+		return (NULL);
+
+	ha->ha_usage = usage;
+	STAILQ_INIT(&ha->ha_hrlist);
+	STAILQ_INSERT_TAIL(&p->halist, ha, ha_next);
+
+	return (ha);
+}
+
+static struct hid_report *
+hid_find_report(struct hid_appcol *ha, int report_id)
+{
+	struct hid_report *hr;
+
+	assert(ha != NULL);
+	STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
+		if (hr->hr_id == report_id)
+			return (hr);
+	}
+
+	return (NULL);
+}
+
+static struct hid_report *
+hid_add_report(struct hid_appcol *ha, int report_id)
+{
+	struct hid_report *hr;
+
+	assert(ha != NULL);
+	if ((hr = calloc(1, sizeof(*hr))) == NULL)
+		return (NULL);
+
+	hr->hr_id = report_id;
+	STAILQ_INIT(&hr->hr_ihflist);
+	STAILQ_INIT(&hr->hr_ohflist);
+	STAILQ_INIT(&hr->hr_fhflist);
+	STAILQ_INSERT_TAIL(&ha->ha_hrlist, hr, hr_next);
+
+	return (hr);
+}
+
+static void
+hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
+    int flags, int nusage, unsigned int usages[])
+{
+	struct hid_field *hf;
+	int i;
+
+	if ((hf = calloc(1, sizeof(*hf))) == NULL)
+		err(1, "hid_parser: calloc");
+
+	switch (kind) {
+	case HID_INPUT:
+		STAILQ_INSERT_TAIL(&hr->hr_ihflist, hf, hf_next);
+		break;
+	case HID_OUTPUT:
+		STAILQ_INSERT_TAIL(&hr->hr_ohflist, hf, hf_next);
+		break;
+	case HID_FEATURE:
+		STAILQ_INSERT_TAIL(&hr->hr_fhflist, hf, hf_next);
+		break;
+	}
+
+	hf->hf_flags = flags;
+	hf->hf_pos = hr->hr_pos[kind];
+	hf->hf_count = hs->report_count;
+	hf->hf_size = hs->report_size;
+	hf->hf_usage = calloc(hf->hf_count, sizeof(*hf->hf_usage));
+	hf->hf_value = calloc(hf->hf_count, sizeof(*hf->hf_value));
+	if (hf->hf_usage == NULL || hf->hf_value == NULL)
+		err(1, "hid_parser: calloc");
+
+	if (hf->hf_flags & HIO_VARIABLE) {
+		for (i = 0; i < nusage && i < hf->hf_count; i++)
+			hf->hf_usage[i] = usages[i];
+	} else {
+		hf->hf_usage_min = hs->usage_minimum;
+		hf->hf_usage_max = hs->usage_maximum;
+	}
+
+	hr->hr_pos[kind] += hf->hf_count * hf->hf_size;
+}
+
+static void
+hid_parser_init(hid_parser_t p)
+{
+	struct hid_state *hs;
+	struct hid_appcol *ha;
+	struct hid_report *hr;
+	unsigned char *b, *data;
+	unsigned int bTag, bType, bSize;
+	int dval, nusage, collevel, minset, i;
+	unsigned int usages[MAXUSAGE];
+
+#define	CHECK_REPORT_0							\
+	do {								\
+		if (hr == NULL) {					\
+			assert(ha != NULL);				\
+			hr = hid_add_report(ha, 0);			\
+			if (hr == NULL)					\
+				errx(1, "hid_add_report failed");	\
+		}							\
+	} while(0)
+	
+	assert(p != NULL);
+
+	ha = NULL;
+	hr = NULL;
+	if ((hs = hid_new_state()) == NULL)
+		err(1, "calloc");
+	minset = 0;
+	nusage = 0;
+	collevel = 0;
+
+	b = p->rdesc;
+	while (b < p->rdesc + p->rsz) {
+
+		bSize = *b++;
+
+		/* Skip long item */
+		if (bSize == 0xfe) {
+			bSize = *b++;
+			bTag = *b++;
+			b += bSize;
+			continue;
+		}
+
+		/* Short item otherwise. */
+		bTag = bSize >> 4;
+		bType = (bSize >> 2) & 3;
+		bSize &= 3;
+		if (bSize == 3)
+			bSize = 4;
+		data = b;
+		b += bSize;
+
+		switch(bSize) {
+		case 0:
+			dval = 0;
+			break;
+		case 1:
+			dval = *data++;
+			break;
+		case 2:
+			dval = *data++;
+			dval |= *data++ << 8;
+			break;
+		case 4:
+			dval = *data++;
+			dval |= *data++ << 8;
+			dval |= *data++ << 16;
+			dval |= *data++ << 24;
+			break;
+		default:
+			errx(1, "hid_parser: internal error bSize==%u", bSize);
+		}
+
+		switch (bType) {
+		case 0:		/* Main */
+			switch (bTag) {
+			case 8:		/* Input */
+				CHECK_REPORT_0;
+				hid_add_field(hr, hs, HID_INPUT, dval, nusage,
+				    usages);
+				nusage = 0;
+				hid_clear_local(hs);
+				break;
+			case 9:		/* Output */
+				CHECK_REPORT_0;
+				hid_add_field(hr, hs, HID_OUTPUT, dval, nusage,
+				    usages);
+				nusage = 0;
+				hid_clear_local(hs);
+				break;
+			case 10:	/* Collection */
+				if (dval == 0x01 && collevel == 0) {
+					/* Top-Level Application Collection */
+					ha = hid_add_appcol(p, hs->usage);
+				}
+				collevel++;
+				hid_clear_local(hs);
+				nusage = 0;
+				break;
+			case 11:	/* Feature */
+				CHECK_REPORT_0;
+				hid_add_field(hr, hs, HID_FEATURE, dval, nusage,
+				    usages);
+				nusage = 0;
+				hid_clear_local(hs);
+				break;
+			case 12:	/* End collection */
+				collevel--;
+				/*hid_clear_local(c);*/
+				nusage = 0;
+				break;
+			default:
+				warnx("hid_parser: unknown Main item(%u)",
+				    bTag);
+			}
+			break;
+
+		case 1:		/* Global */
+			switch (bTag) {
+			case 0:
+				hs->usage_page = dval << 16;
+				break;
+			case 1:
+				hs->logical_minimum = dval;
+				break;
+			case 2:
+				hs->logical_maximum = dval;
+				break;
+			case 3:
+				hs->physical_minimum = dval;
+				break;
+			case 4:
+				hs->physical_maximum = dval;
+				break;
+			case 5:
+				hs->unit_exponent = dval;
+				break;
+			case 6:
+				hs->unit = dval;
+				break;
+			case 7:
+				hs->report_size = dval;
+				break;
+			case 8:
+				assert(ha != NULL);
+				hr = hid_find_report(ha, dval);
+				if (hr == NULL) {
+					hr = hid_add_report(ha, dval);
+					if (hr == NULL)
+						errx(1, "hid_parser: "
+						    "hid_add_report failed");
+				}
+				break;
+			case 9:
+				hs->report_count = dval;
+				break;
+			case 10: /* Push */
+				hs = hid_push_state(hs);
+				if (hs == NULL)
+					errx(1, "hid_parser: "
+					    "hid_push_state failed");
+				break;
+			case 11: /* Pop */
+				hs = hid_pop_state(hs);
+				if (hs == NULL)
+					errx(1, "hid_parser: "
+					    "hid_pop state failed");
+				break;
+			default:
+				warnx("hid_parser: unknown Global item(%u)",
+				    bTag);
+				break;
+			}
+			break;
+		case 2:		/* Local */
+			switch (bTag) {
+			case 0:
+				hs->usage = hs->usage_page | dval;
+				if (nusage < MAXUSAGE)
+					usages[nusage++] = hs->usage;
+				/* else XXX */
+				break;
+			case 1:
+				hs->usage_minimum = hs->usage_page | dval;
+				minset = 1;
+				break;
+			case 2:
+				hs->usage_maximum = hs->usage_page | dval;
+				if (minset) {
+					for (i = hs->usage_minimum;
+					     i <= hs->usage_maximum &&
+					     nusage < MAXUSAGE;
+					     i++)
+						usages[nusage++] = i;
+					minset = 0;
+				}
+				break;
+			case 3:
+				hs->designator_index = dval;
+				break;
+			case 4:
+				hs->designator_minimum = dval;
+				break;
+			case 5:
+				hs->designator_maximum = dval;
+				break;
+			case 7:
+				hs->string_index = dval;
+				break;
+			case 8:
+				hs->string_minimum = dval;
+				break;
+			case 9:
+				hs->string_maximum = dval;
+				break;
+			case 10:
+				hs->set_delimiter = dval;
+				break;
+			default:
+				warnx("hid_parser: unknown Local item(%u)",
+				    bTag);
+				break;
+			}
+			break;
+		default:
+			warnx("hid_parser: unknown bType(%u)", bType);
+		}
+
+	}
+
+	if (verbose)
+		hid_parser_dump(p);
+#undef CHECK_REPORT_0
+}
+
+static void
+hid_clear_local(struct hid_state *hs)
+{
+	hs->usage = 0;
+	hs->usage_minimum = 0;
+	hs->usage_maximum = 0;
+	hs->designator_index = 0;
+	hs->designator_minimum = 0;
+	hs->designator_maximum = 0;
+	hs->string_index = 0;
+	hs->string_minimum = 0;
+	hs->string_maximum = 0;
+	hs->set_delimiter = 0;
+}
+
+static void
+hid_parser_dump(hid_parser_t p)
+{
+	struct hid_appcol *ha;
+	struct hid_report *hr;
+	struct hid_field *hf;
+	unsigned int up, u;
+	int i;
+
+#define PRINT_FIELD							\
+	do {								\
+		printf("      POS:%d SIZE:%d COUNT:%d ",		\
+		    hf->hf_pos, hf->hf_size, hf->hf_count);		\
+		if (hf->hf_flags & HIO_CONST)				\
+			printf("[CONST]\n");				\
+		else if (hf->hf_flags & HIO_VARIABLE) {			\
+			printf("[VARIABLE]\n");				\
+			for (i = 0; i < hf->hf_count; i++) {		\
+				up = HID_PAGE(hf->hf_usage[i]);		\
+				u = HID_USAGE(hf->hf_usage[i]);		\
+				printf("        USAGE %s\n",		\
+				    usage_in_page(up, u));		\
+			}						\
+		} else {						\
+			printf("[ARRAY]\n");				\
+			printf("        USAGE [%u -> %u] ",		\
+			    HID_USAGE(hf->hf_usage_min),		\
+			    HID_USAGE(hf->hf_usage_max));		\
+			printf("(%s)\n",				\
+			    usage_page(HID_PAGE(hf->hf_usage_min)));	\
+		}							\
+	} while (0)
+		
+
+	STAILQ_FOREACH(ha, &p->halist, ha_next) {
+		up = HID_PAGE(ha->ha_usage);
+		u = HID_USAGE(ha->ha_usage);
+		printf("HID APPLICATION COLLECTION (%s)\n",
+		    usage_in_page(up, u));
+		STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
+			printf("  HID REPORT: ID %d\n", hr->hr_id);
+			if (!STAILQ_EMPTY(&hr->hr_ihflist))
+			    printf("    INPUT: \n");
+			STAILQ_FOREACH(hf, &hr->hr_ihflist, hf_next) {
+				PRINT_FIELD;
+			}
+			if (!STAILQ_EMPTY(&hr->hr_ohflist))
+			    printf("    OUTPUT: \n");
+			STAILQ_FOREACH(hf, &hr->hr_ohflist, hf_next) {
+				PRINT_FIELD;
+			}
+			if (!STAILQ_EMPTY(&hr->hr_fhflist))
+			    printf("    FEATURE: \n");
+			STAILQ_FOREACH(hf, &hr->hr_fhflist, hf_next) {
+				PRINT_FIELD;
+			}
+		}
+	}
+
+#undef PRINT_FIELD
+}
+
+#if 0
 hid_data_t
 hid_start_parse(hid_parser_t p, int kindset)
 {
@@ -582,3 +1013,4 @@ hid_set_data(void *p, const hid_item_t *h, int data)
 		buf[offs + i] = (buf[offs + i] & (mask >> (i*8))) |
 			((data >> (i*8)) & 0xff);
 }
+#endif

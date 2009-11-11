@@ -62,18 +62,22 @@ static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
 static void	attach_hid_parent(struct hid_parent *hp);
+#if 0
 static int	attach_hid_child(struct hid_child *hc);
 static void	child_recv(struct hid_child *hc, char *buf, int len);
 static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
-static void	sighandler(int sig __unused);
 static void	*start_hid_parent(void *arg);
+#endif
+static void	sighandler(int sig __unused);
 static void	terminate(int eval);
 
 int
 main(int argc, char **argv)
 {
+#if 0
 	struct hid_parent *hp;
+#endif
 	struct libusb20_backend *backend;
 	char *pid_file;
 	pid_t otherpid;
@@ -177,6 +181,7 @@ main(int argc, char **argv)
 	if (STAILQ_EMPTY(&hplist))
 		goto uhidd_end;
 
+#if 0
 	STAILQ_FOREACH(hp, &hplist, next) {
 		if (!STAILQ_EMPTY(&hp->hclist))
 		    pthread_create(&hp->thread, NULL, start_hid_parent,
@@ -186,6 +191,7 @@ main(int argc, char **argv)
 		if (!STAILQ_EMPTY(&hp->hclist))
 			pthread_join(hp->thread, NULL);
 	}
+#endif
 
 uhidd_end:
 
@@ -393,6 +399,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	attach_hid_parent(hp);
 }
 
+#if 0
 static void
 repair_report_desc(struct hid_child *hc)
 {
@@ -529,19 +536,28 @@ repair_report_desc(struct hid_child *hc)
 		}
 	}
 }
+#endif
 
 static void
 attach_hid_parent(struct hid_parent *hp)
 {
+#if 0
 	struct hid_child *hc;
+#endif
 	hid_parser_t p;
+#if 0
 	hid_data_t d;
 	hid_item_t h, ch;
 	int rid[_MAX_REPORT_IDS];
 	int i, nr, start, end, lend;
+#endif
 
 	/* Check how many children we have. */
 	p = hid_parser_alloc(hp->rdesc, hp->rsz);
+
+	return;
+
+#if 0
 	nr = hid_get_report_id_num(p);
 	hid_get_report_ids(p, rid, nr);
 	if (verbose) {
@@ -634,12 +650,14 @@ attach_hid_parent(struct hid_parent *hp)
 				}
 			}
 
+#if 0
 			/*
 			 * Here we need to "repair" some child report desc
 			 * before we can give it to the parser, since there
 			 * are possible global items(i.e. environment) missing.
 			 */
 			repair_report_desc(hc);
+#endif
 
 			/*
 			 * Attach child.
@@ -655,8 +673,10 @@ attach_hid_parent(struct hid_parent *hp)
 	}
 	hid_end_parse(d);
 	hid_parser_free(p);
+#endif
 }
 
+#if 0
 static int
 attach_hid_child(struct hid_child *hc)
 {
@@ -926,6 +946,7 @@ child_recv(struct hid_child *hc, char *buf, int len)
 		assert(0);
 	}
 }
+#endif
 
 static void
 usage(void)
