@@ -41,119 +41,43 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 #include "uhidd.h"
 
 static void	hid_clear_local(struct hid_state *c);
-static void	hid_parser_init(hid_parser_t p);
-static void	hid_parser_dump(hid_parser_t p);
+static void	hid_parser_init(struct hid_interface * p);
+static void	hid_parser_dump(struct hid_interface * p);
 #if 0
 static int	hid_get_item_raw(hid_data_t s, hid_item_t *h);
 #endif
 
+#if 0
 static int
 min(int x, int y)
 {
 
 	return (x < y ? x : y);
 }
-
-hid_parser_t
-hid_parser_alloc(unsigned char *rdesc, int rsz)
-{
-	struct hid_parser *p;
-
-	p = calloc(1, sizeof(*p));
-	if (p == NULL)
-		err(1, "calloc");
-	memcpy(p->rdesc, rdesc, rsz);
-	p->rsz = rsz;
-	STAILQ_INIT(&p->halist);
-	hid_parser_init(p);
-
-	return (p);
-}
-
-void
-hid_parser_free(hid_parser_t p)
-{
-
-	free(p);
-}
-
-int
-hid_get_report_id_num(hid_parser_t p)
-{
-
-	return (p->nr);
-}
-
-void
-hid_get_report_ids(hid_parser_t p, int *rid, int size)
-{
-	int s;
-
-	s = min(size, p->nr);
-	memcpy(rid, p->rid, s*sizeof(int));
-}
-
-#if 0
-static void
-hid_parser_init(hid_parser_t p)
-{
-	unsigned char *b, *data;
-	unsigned int bTag, bType, bSize;
-	int dval, found, i;
-
-	/* Collect all the report id(s) in the report desc. */
-	b = p->rdesc;
-	while (b < p->rdesc + p->rsz) {
-		bSize = *b++;
-		if (bSize == 0xfe) {
-			/* long item */
-			bSize = *b++;
-			bTag = *b++;
-			b += bSize;
-		} else {
-			/* short item */
-			bTag = bSize >> 4;
-			bType = (bSize >> 2) & 3;
-			bSize &= 3;
-			if (bSize == 3)
-				bSize = 4;
-			data = b;
-			b += bSize;
-			/* only interested in REPORT ID. */
-			if (bType == 1 && bTag == 8) {
-				switch (bSize) {
-				case 0:
-					dval = 0;
-					break;
-				case 1:
-					dval = *data++;
-					break;
-				case 2:
-					dval = *data++;
-					dval |= *data++ << 8;
-					break;
-				case 4:
-					dval = *data++;
-					dval |= *data++ << 8;
-					dval |= *data++ << 16;
-					dval |= *data++ << 24;
-					break;
-				default:
-					continue;
-				}
-				found = 0;
-				for (i = 0; i < p->nr; i++)
-					if (dval == p->rid[i]) {
-						found = 1;
-						break;
-					}
-				if (!found)
-					p->rid[p->nr++] = dval;
-			}
-		}
-	}
-}
 #endif
+
+struct hid_interface *
+hid_interface_alloc(unsigned char *rdesc, int rsz)
+{
+	struct hid_interface *hi;
+
+	hi = calloc(1, sizeof(*hi));
+	if (hi == NULL)
+		err(1, "calloc");
+	memcpy(hi->rdesc, rdesc, rsz);
+	hi->rsz = rsz;
+	STAILQ_INIT(&hi->halist);
+	hid_parser_init(hi);
+
+	return (hi);
+}
+
+void
+hid_interface_free(struct hid_interface *hi)
+{
+
+	free(hi);
+}
 
 static struct hid_state *
 hid_new_state(void)
@@ -190,18 +114,18 @@ hid_pop_state(struct hid_state *cur_hs)
 }
 
 static struct hid_appcol *
-hid_add_appcol(hid_parser_t p, unsigned int usage)
+hid_add_appcol(struct hid_interface *hi, unsigned int usage)
 {
 	struct hid_appcol *ha;
 
-	assert(p != NULL);
+	assert(hi != NULL);
 	
 	if ((ha = calloc(1, sizeof(*ha))) == NULL)
 		return (NULL);
 
 	ha->ha_usage = usage;
 	STAILQ_INIT(&ha->ha_hrlist);
-	STAILQ_INSERT_TAIL(&p->halist, ha, ha_next);
+	STAILQ_INSERT_TAIL(&hi->halist, ha, ha_next);
 
 	return (ha);
 }
@@ -212,6 +136,7 @@ hid_find_report(struct hid_appcol *ha, int report_id)
 	struct hid_report *hr;
 
 	assert(ha != NULL);
+
 	STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
 		if (hr->hr_id == report_id)
 			return (hr);
@@ -224,15 +149,15 @@ static struct hid_report *
 hid_add_report(struct hid_appcol *ha, int report_id)
 {
 	struct hid_report *hr;
+	int i;
 
 	assert(ha != NULL);
 	if ((hr = calloc(1, sizeof(*hr))) == NULL)
 		return (NULL);
 
 	hr->hr_id = report_id;
-	STAILQ_INIT(&hr->hr_ihflist);
-	STAILQ_INIT(&hr->hr_ohflist);
-	STAILQ_INIT(&hr->hr_fhflist);
+	for (i = 0; i < 3; i++)
+		STAILQ_INIT(&hr->hr_hflist[i]);
 	STAILQ_INSERT_TAIL(&ha->ha_hrlist, hr, hr_next);
 
 	return (hr);
@@ -248,17 +173,7 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 	if ((hf = calloc(1, sizeof(*hf))) == NULL)
 		err(1, "hid_parser: calloc");
 
-	switch (kind) {
-	case HID_INPUT:
-		STAILQ_INSERT_TAIL(&hr->hr_ihflist, hf, hf_next);
-		break;
-	case HID_OUTPUT:
-		STAILQ_INSERT_TAIL(&hr->hr_ohflist, hf, hf_next);
-		break;
-	case HID_FEATURE:
-		STAILQ_INSERT_TAIL(&hr->hr_fhflist, hf, hf_next);
-		break;
-	}
+	STAILQ_INSERT_TAIL(&hr->hr_hflist[kind], hf, hf_next);
 
 	hf->hf_flags = flags;
 	hf->hf_pos = hr->hr_pos[kind];
@@ -281,7 +196,7 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 }
 
 static void
-hid_parser_init(hid_parser_t p)
+hid_parser_init(struct hid_interface *hi)
 {
 	struct hid_state *hs;
 	struct hid_appcol *ha;
@@ -301,7 +216,7 @@ hid_parser_init(hid_parser_t p)
 		}							\
 	} while(0)
 	
-	assert(p != NULL);
+	assert(hi != NULL);
 
 	ha = NULL;
 	hr = NULL;
@@ -311,8 +226,8 @@ hid_parser_init(hid_parser_t p)
 	nusage = 0;
 	collevel = 0;
 
-	b = p->rdesc;
-	while (b < p->rdesc + p->rsz) {
+	b = hi->rdesc;
+	while (b < hi->rdesc + hi->rsz) {
 
 		bSize = *b++;
 
@@ -374,7 +289,7 @@ hid_parser_init(hid_parser_t p)
 			case 10:	/* Collection */
 				if (dval == 0x01 && collevel == 0) {
 					/* Top-Level Application Collection */
-					ha = hid_add_appcol(p, hs->usage);
+					ha = hid_add_appcol(hi, hs->usage);
 				}
 				collevel++;
 				hid_clear_local(hs);
@@ -512,7 +427,7 @@ hid_parser_init(hid_parser_t p)
 	}
 
 	if (verbose)
-		hid_parser_dump(p);
+		hid_parser_dump(hi);
 #undef CHECK_REPORT_0
 }
 
@@ -532,13 +447,13 @@ hid_clear_local(struct hid_state *hs)
 }
 
 static void
-hid_parser_dump(hid_parser_t p)
+hid_parser_dump(struct hid_interface *hi)
 {
 	struct hid_appcol *ha;
 	struct hid_report *hr;
 	struct hid_field *hf;
 	unsigned int up, u;
-	int i;
+	int i, j;
 
 #define PRINT_FIELD							\
 	do {								\
@@ -548,9 +463,9 @@ hid_parser_dump(hid_parser_t p)
 			printf("[CONST]\n");				\
 		else if (hf->hf_flags & HIO_VARIABLE) {			\
 			printf("[VARIABLE]\n");				\
-			for (i = 0; i < hf->hf_count; i++) {		\
-				up = HID_PAGE(hf->hf_usage[i]);		\
-				u = HID_USAGE(hf->hf_usage[i]);		\
+			for (j = 0; j < hf->hf_count; j++) {		\
+				up = HID_PAGE(hf->hf_usage[j]);		\
+				u = HID_USAGE(hf->hf_usage[j]);		\
 				printf("        USAGE %s\n",		\
 				    usage_in_page(up, u));		\
 			}						\
@@ -565,27 +480,29 @@ hid_parser_dump(hid_parser_t p)
 	} while (0)
 		
 
-	STAILQ_FOREACH(ha, &p->halist, ha_next) {
+	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
 		up = HID_PAGE(ha->ha_usage);
 		u = HID_USAGE(ha->ha_usage);
 		printf("HID APPLICATION COLLECTION (%s)\n",
 		    usage_in_page(up, u));
 		STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
 			printf("  HID REPORT: ID %d\n", hr->hr_id);
-			if (!STAILQ_EMPTY(&hr->hr_ihflist))
-			    printf("    INPUT: \n");
-			STAILQ_FOREACH(hf, &hr->hr_ihflist, hf_next) {
-				PRINT_FIELD;
-			}
-			if (!STAILQ_EMPTY(&hr->hr_ohflist))
-			    printf("    OUTPUT: \n");
-			STAILQ_FOREACH(hf, &hr->hr_ohflist, hf_next) {
-				PRINT_FIELD;
-			}
-			if (!STAILQ_EMPTY(&hr->hr_fhflist))
-			    printf("    FEATURE: \n");
-			STAILQ_FOREACH(hf, &hr->hr_fhflist, hf_next) {
-				PRINT_FIELD;
+			for (i = 0; i < 3; i++) {
+				if (!STAILQ_EMPTY(&hr->hr_hflist[i]))
+					switch (i) {
+					case HID_INPUT:
+						printf("    INPUT: \n");
+						break;
+					case HID_OUTPUT:
+						printf("    OUTPUT: \n");
+						break;
+					case HID_FEATURE:
+						printf("    FEATURE: \n");
+						break;
+					}
+				STAILQ_FOREACH(hf, &hr->hr_hflist[i], hf_next) {
+					PRINT_FIELD;
+				}
 			}
 		}
 	}
@@ -593,17 +510,111 @@ hid_parser_dump(hid_parser_t p)
 #undef PRINT_FIELD
 }
 
+unsigned int
+hid_appcol_get_usage(struct hid_appcol *ha)
+{
+
+	assert(ha != NULL);
+	return (ha->ha_usage);
+}
+
+void
+hid_appcol_set_private(struct hid_appcol *ha, void *data)
+{
+
+	assert(ha != NULL);
+	ha->ha_data = data;
+}
+
+void *
+hid_appcol_get_private(struct hid_appcol *ha)
+{
+
+	assert(ha != NULL);
+	return (ha->ha_data);
+}
+
+struct hid_report *
+hid_appcol_get_next_report(struct hid_appcol *ha, struct hid_report *hr)
+{
+	struct hid_report *nhr;
+
+	assert(ha != NULL);
+	if (hr == NULL)
+		nhr = STAILQ_FIRST(&ha->ha_hrlist);
+	else
+		nhr = STAILQ_NEXT(hr, hr_next);
+
+	return (nhr);
+}
+
+int
+hid_report_get_id(struct hid_report *hr)
+{
+
+	assert(hr != NULL);
+
+	return (hr->hr_id);
+}
+
+struct hid_field *
+hid_report_get_next_field(struct hid_report *hr, struct hid_field *hf,
+    enum hid_kind kind)
+{
+	struct hid_field *nhf;
+
+	assert(hr != NULL);
+	if (hf == NULL)
+		nhf = STAILQ_FIRST(&hr->hr_hflist[kind]);
+	else
+		nhf = STAILQ_NEXT(hf, hf_next);
+
+	return (nhf);
+}
+
+int
+hid_field_get_flags(struct hid_field *hf)
+{
+
+	assert(hf != NULL);
+
+	return (hf->hf_flags);
+}
+
+int
+hid_field_get_usage_count(struct hid_field *hf)
+{
+
+	assert(hf != NULL);
+
+	return (hf->hf_count);
+}
+
+void
+hid_field_get_usage_value(struct hid_field *hf, int i, unsigned int *usage,
+    int *value)
+{
+
+	assert(hf != NULL);
+	assert(i >= 0 && i < hf->hf_count);
+
+	if (usage != NULL)
+		*usage = hf->hf_usage[i];
+	if (value != NULL)
+		*value = hf->hf_value[i];
+}
+
 #if 0
 hid_data_t
-hid_start_parse(hid_parser_t p, int kindset)
+hid_start_parse(struct hid_interface * p, int kindset)
 {
 	struct hid_data *s;
 
 	s = calloc(1, sizeof(*s));
 	if (s == NULL)
 		err(1, "calloc");
-	s->start = s->p = p->rdesc;
-	s->end = p->rdesc + p->rsz;
+	s->start = s->p = hi->rdesc;
+	s->end = hi->rdesc + hi->rsz;
 	s->kindset = kindset;
 	return (s);
 }
@@ -886,7 +897,7 @@ top:
 }
 
 int
-hid_report_size(hid_parser_t p, enum hid_kind k, int id)
+hid_report_size(struct hid_interface * p, enum hid_kind k, int id)
 {
 	struct hid_data *d;
 	hid_item_t h;
@@ -903,7 +914,7 @@ hid_report_size(hid_parser_t p, enum hid_kind k, int id)
 }
 
 int
-hid_locate(hid_parser_t p, unsigned int u, enum hid_kind k, hid_item_t *h)
+hid_locate(struct hid_interface * p, unsigned int u, enum hid_kind k, hid_item_t *h)
 {
 	hid_data_t d;
 

@@ -83,6 +83,47 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
+/*
+ * Keyboard device.
+ */
+
+#define	MAX_KEYCODE	16
+
+struct kbd_data {
+	uint8_t mod;
+
+#define	MOD_CONTROL_L	0x01
+#define	MOD_CONTROL_R	0x10
+#define	MOD_SHIFT_L	0x02
+#define	MOD_SHIFT_R	0x20
+#define	MOD_ALT_L	0x04
+#define	MOD_ALT_R	0x40
+#define	MOD_WIN_L	0x08
+#define	MOD_WIN_R	0x80
+
+	uint8_t keycode[MAX_KEYCODE];
+	uint32_t time[MAX_KEYCODE];
+};
+
+struct kbd_dev {
+	int vkbd_fd;
+#if 0
+	hid_item_t mods;
+	hid_item_t keys;
+#endif
+	int key_cnt;
+	struct kbd_data ndata;
+	struct kbd_data odata;
+	pthread_t kbd_task;
+	pthread_mutex_t kbd_mtx;
+	uint32_t now;
+	int delay1;
+	int delay2;
+
+#define KB_DELAY1	500
+#define KB_DELAY2	100
+};
+
 #define	KBD		hc->u.kd
 #define KBD_LOCK	pthread_mutex_lock(&KBD.kbd_mtx);
 #define KBD_UNLOCK	pthread_mutex_unlock(&KBD.kbd_mtx);
@@ -379,6 +420,7 @@ do {				\
 	(n) ++;			\
 } while (0)
 
+#if 0
 static void
 kbd_write(struct hid_child *hc, int hid_key, int make)
 {
@@ -493,66 +535,138 @@ kbd_process_keys(struct hid_child *hc)
 
 	KBD.odata = KBD.ndata;
 }
+#endif
 
-int
-kbd_attach(struct hid_child *hc)
+static int
+kbd_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
-	struct stat sb;
+	unsigned int u;
 
+	u = hid_appcol_get_usage(ha);
+	if (u == HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD))
+		return (HID_MATCH_GENERAL);
+
+	return (HID_MATCH_NONE);
+}
+
+static int
+kbd_attach(struct hid_appcol *ha)
+{
+#if 0
+	struct hid_parent *hp;
+#endif
+	struct hid_report *hr;
+	struct hid_field *hf;
+	struct kbd_dev *kd;
+	struct stat sb;
+	unsigned int usage;
+	int modifier_found, key_found, flags;
+
+#if 0
 	hp = hc->parent;
 	assert(hp != NULL);
+#endif
+
+	if ((kd = calloc(1, sizeof(*kd))) == NULL) {
+		syslog(LOG_ERR, "calloc failed in kbd_attach: %m");
+		return (-1);
+	}
+
+	hid_appcol_set_private(ha, kd);
 
 	/* Open /dev/vkbdctl. */
-	if ((KBD.vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
+	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
 		if (verbose && errno == ENOENT)
 			PRINT2("vkbd.ko kernel module not loaded?\n")
+#endif
 		return (-1);
 	}
 
 	if (verbose) {
-		if (fstat(KBD.vkbd_fd, &sb) < 0) {
+		if (fstat(kd->vkbd_fd, &sb) < 0) {
+#if 0
 			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
 			    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
 			    type_name(hc->type));
+#endif
 			return (-1);
 		}
+#if 0
 		PRINT2("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
+#endif
 	}
 
+#if 0
 	/* Find the location of modifiers. (224 is LeftControl)*/
 	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 224), hid_input,
-		&KBD.mods)) {
+		&kd->mods)) {
 		if (verbose)
-			PRINT2("modifiers at %d\n", KBD.mods.pos);
+			PRINT2("modifiers at %d\n", kd->mods.pos);
 		/* We want the 8bit long data start from LeftControl. */
-		KBD.mods.report_size = 8;
+		kd->mods.report_size = 8;
 	} else
 		PRINT2("warning: no modifiers\n");
 
 	/* Find the location of keycode array. */
 	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 0), hid_input,
-		&KBD.keys)) {
+		&kd->keys)) {
 		if (verbose)
-			PRINT2("keycode array (%d)\n", KBD.keys.pos);
+			PRINT2("keycode array (%d)\n", kd->keys.pos);
 	} else
 		PRINT2("warning: no keycode array\n");
+#endif
 
-	KBD.key_cnt = KBD.keys.report_count;
+	hr = hid_appcol_get_next_report(ha, NULL);
+	if (hr == NULL) {
+		syslog(LOG_ERR, "keyboard child device doesn't have any "
+		    "report, attach failed");
+		return (-1);
+	}
+	if (hid_report_get_id(hr) != 0)
+		syslog(LOG_WARNING, "keyboard child device has non-zero "
+		    "report id, probably not supported by this driver");
 
+	modifier_found = 0;
+	key_found = 0;
+	hf = NULL;
+	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
+		flags = hid_field_get_flags(hf);
+		if (flags & HIO_CONST)
+			continue;
+		hid_field_get_usage_value(hf, 0, &usage, NULL);
+		/* 224 is LeftControl. */
+		if (usage == HID_USAGE2(HUP_KEYBOARD, 224))
+			modifier_found = 1;
+		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
+			key_found = 1;
+			kd->key_cnt = hid_field_get_usage_count(hf);
+		}
+	}
+
+	if (!modifier_found)
+		syslog(LOG_WARNING, "keyboard doesn't have modifier keys");
+	if (!key_found) {
+		syslog(LOG_ERR, "keyboard doesn't have key array, "
+		    "attach failed");
+		return (-1);
+	}
 	/* TODO: These should be tunable. */
-	KBD.delay1 = KB_DELAY1;
-	KBD.delay2 = KB_DELAY2;
+	kd->delay1 = KB_DELAY1;
+	kd->delay2 = KB_DELAY2;
 
-	pthread_mutex_init(&KBD.kbd_mtx, NULL);
-	pthread_create(&KBD.kbd_task, NULL, kbd_task, hc);
+#if 0
+	pthread_mutex_init(&kd->kbd_mtx, NULL);
+	pthread_create(&kd->kbd_task, NULL, kbd_task, kd);
+#endif
 
 	return (0);
 }
 
+#if 0
 void
 kbd_recv(struct hid_child *hc, char *buf, int len)
 {
@@ -565,12 +679,12 @@ kbd_recv(struct hid_child *hc, char *buf, int len)
 	assert(hp != NULL);
 
 	KBD_LOCK;
-	KBD.ndata.mod = (uint8_t) hid_get_data(buf, &KBD.mods);
-	cnt = hid_get_array8(buf, KBD.ndata.keycode, &KBD.keys);
+	kd->ndata.mod = (uint8_t) hid_get_data(buf, &kd->mods);
+	cnt = hid_get_array8(buf, kd->ndata.keycode, &kd->keys);
 	if (verbose) {
-		PRINT2("keycode received data: mod(0x%02x)", KBD.ndata.mod);
+		PRINT2("keycode received data: mod(0x%02x)", kd->ndata.mod);
 		for (i = 0; i < cnt; i++)
-			printf(" %d", KBD.ndata.keycode[i]);
+			printf(" %d", kd->ndata.keycode[i]);
 		putchar('\n');
 	}
 	KBD_UNLOCK;
@@ -580,8 +694,8 @@ void
 kbd_cleanup(struct hid_child *hc)
 {
 
-	KBD.ndata.mod = 0;
-	memset(KBD.ndata.keycode, 0, sizeof(KBD.ndata.keycode));
+	kd->ndata.mod = 0;
+	memset(kd->ndata.keycode, 0, sizeof(kd->ndata.keycode));
 	kbd_process_keys(hc);
 }
 
@@ -593,7 +707,7 @@ kbd_task(void *arg)
 	hc = arg;
 	assert(hc != NULL);
 
-	for (KBD.now = 0; ; KBD.now += 25) {
+	for (kd->now = 0; ; kd->now += 25) {
 		KBD_LOCK;
 		kbd_process_keys(hc);
 		KBD_UNLOCK;
@@ -602,3 +716,4 @@ kbd_task(void *arg)
 
 	return (NULL);
 }
+#endif
