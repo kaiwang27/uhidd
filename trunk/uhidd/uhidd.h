@@ -93,21 +93,19 @@ struct hid_field {
 struct hid_report {
 	int hr_id;
 	unsigned int hr_pos[3];
-	STAILQ_HEAD(, hid_field) hr_ihflist; /* Input field list. */
-	STAILQ_HEAD(, hid_field) hr_ohflist; /* Output field list. */
-	STAILQ_HEAD(, hid_field) hr_fhflist; /* Feature field list. */
+	STAILQ_HEAD(, hid_field) hr_hflist[3];
 	STAILQ_ENTRY(hid_report) hr_next;
 };
 
 /* HID application collection. */
 struct hid_appcol {
 	unsigned int ha_usage;
-	struct hid_driver *hd;
+	void *ha_data;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
 	STAILQ_ENTRY(hid_appcol) ha_next;
 };
 
-struct hid_parser {
+struct hid_interface {
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
@@ -115,7 +113,15 @@ struct hid_parser {
 	STAILQ_HEAD(, hid_appcol) halist;
 };
 
-typedef struct hid_parser *hid_parser_t;
+#define	HID_MATCH_NONE		0
+#define	HID_MATCH_GENERAL	10
+#define	HID_MATCH_DEVICE	20
+
+struct hid_driver {
+	int (*match)(struct hid_appcol *);
+	int (*attach)(struct hid_appcol *);
+	void (*recv)(struct hid_appcol *, struct hid_report *);
+};
 
 /*
  * Configuration.
@@ -166,45 +172,6 @@ struct mouse_dev {
 	hid_item_t btn[BUTTON_MAX];
 	int btn_cnt;
 	int flags;
-};
-
-/*
- * Keyboard device.
- */
-
-#define	MAX_KEYCODE	16
-
-struct kbd_data {
-	uint8_t mod;
-
-#define	MOD_CONTROL_L	0x01
-#define	MOD_CONTROL_R	0x10
-#define	MOD_SHIFT_L	0x02
-#define	MOD_SHIFT_R	0x20
-#define	MOD_ALT_L	0x04
-#define	MOD_ALT_R	0x40
-#define	MOD_WIN_L	0x08
-#define	MOD_WIN_R	0x80
-
-	uint8_t keycode[MAX_KEYCODE];
-	uint32_t time[MAX_KEYCODE];
-};
-
-struct kbd_dev {
-	int vkbd_fd;
-	hid_item_t mods;
-	hid_item_t keys;
-	int key_cnt;
-	struct kbd_data ndata;
-	struct kbd_data odata;
-	pthread_t kbd_task;
-	pthread_mutex_t kbd_mtx;
-	uint32_t now;
-	int delay1;
-	int delay2;
-
-#define KB_DELAY1	500
-#define KB_DELAY2	100
 };
 
 /*
@@ -265,7 +232,7 @@ struct hid_child {
 #if 0
 	hid_item_t		 env;
 #endif
-	hid_parser_t		 p;
+	struct hid_interface	*hi;
 #if 0
 	union {
 		struct mouse_dev md;
@@ -342,10 +309,21 @@ void		find_global_hidaction(struct hid_child *);
 void		hexdump_report_desc(unsigned char *, int);
 int		hid_attach(struct hid_child *);
 void		hid_recv(struct hid_child *, char *, int);
-hid_parser_t	hid_parser_alloc(unsigned char *, int);
-void		hid_parser_free(hid_parser_t);
-int		hid_get_report_id_num(hid_parser_t);
-void		hid_get_report_ids(hid_parser_t, int *, int);
+struct hid_interface *hid_interface_alloc(unsigned char *, int);
+void		hid_interface_free(struct hid_interface *);
+unsigned int	hid_appcol_get_usage(struct hid_appcol *);
+void		hid_appcol_set_private(struct hid_appcol *, void *);
+void		*hid_appcol_get_private(struct hid_appcol *);
+struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
+    struct hid_report *);
+int		hid_report_get_id(struct hid_report *);
+struct hid_field *hid_report_get_next_field(struct hid_report *,
+    struct hid_field *, enum hid_kind);
+int		hid_field_get_flags(struct hid_field *);
+int		hid_field_get_usage_count(struct hid_field *);
+void		hid_field_get_usage_value(struct hid_field *, int,
+    unsigned int *, int *);
+
 #if 0
 hid_data_t	hid_start_parse(hid_parser_t, int);
 void		hid_end_parse(hid_data_t);
@@ -357,7 +335,6 @@ int		hid_get_data(const void *, const hid_item_t *);
 int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
 #endif
-int		kbd_attach(struct hid_child *);
 void		kbd_cleanup(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
