@@ -47,6 +47,8 @@ static void	hid_parser_dump(struct hid_interface * p);
 static int	hid_get_item_raw(hid_data_t s, hid_item_t *h);
 #endif
 
+static STAILQ_HEAD(, hid_driver) hdlist = STAILQ_HEAD_INITIALIZER(hdlist);
+
 #if 0
 static int
 min(int x, int y)
@@ -77,6 +79,25 @@ hid_interface_free(struct hid_interface *hi)
 {
 
 	free(hi);
+}
+
+void
+hid_interface_input_data(struct hid_interface *hi, char *data, int len)
+{
+	struct hid_appcol *ha;
+	struct hid_report *hr;
+
+	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
+		STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
+			if (hr->hr_id == 0 || hr->hr_id == *data) {
+				hid_appcol_recv_data(ha, hr, data, len);
+				return;
+			}
+		}
+	}
+
+	if (verbose)
+		printf("received data which doesn't belong to any appcol\n");
 }
 
 static struct hid_state *
@@ -185,12 +206,13 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 		err(1, "hid_parser: calloc");
 
 	if (hf->hf_flags & HIO_VARIABLE) {
-		for (i = 0; i < nusage && i < hf->hf_count; i++)
+		for (i = 0; i < nusage && i < hf->hf_count; i++) {
 			hf->hf_usage[i] = usages[i];
-	} else {
-		hf->hf_usage_min = hs->usage_minimum;
-		hf->hf_usage_max = hs->usage_maximum;
+			printf("hf->hf_usage[%d]=%#x\n", i, usages[i]);
+		}
 	}
+	hf->hf_usage_min = hs->usage_minimum;
+	hf->hf_usage_max = hs->usage_maximum;
 
 	hr->hr_pos[kind] += hf->hf_count * hf->hf_size;
 }
@@ -201,9 +223,10 @@ hid_parser_init(struct hid_interface *hi)
 	struct hid_state *hs;
 	struct hid_appcol *ha;
 	struct hid_report *hr;
+	struct hid_driver *hd, *mhd;
 	unsigned char *b, *data;
 	unsigned int bTag, bType, bSize;
-	int dval, nusage, collevel, minset, i;
+	int dval, nusage, collevel, minset, i, match, old_match;
 	unsigned int usages[MAXUSAGE];
 
 #define	CHECK_REPORT_0							\
@@ -428,6 +451,33 @@ hid_parser_init(struct hid_interface *hi)
 
 	if (verbose)
 		hid_parser_dump(hi);
+
+	/*
+	 * Attach drivers.
+	 */
+	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
+		mhd = NULL;
+		old_match = 0;
+		STAILQ_FOREACH(hd, &hdlist, hd_next) {
+			match = hd->hd_match(ha);
+			if (match != HID_MATCH_NONE) {
+				if (mhd == NULL || match > old_match) {
+					mhd = hd;
+					old_match= match;
+				}
+			}
+		}
+		if (mhd != NULL) {
+			if (verbose)
+				printf("find matching driver\n");
+			mhd->hd_attach(ha);
+			exit(1);
+		} else {
+			if (verbose)
+				printf("no matching driver\n");
+		}
+	}
+
 #undef CHECK_REPORT_0
 }
 
@@ -548,6 +598,14 @@ hid_appcol_get_next_report(struct hid_appcol *ha, struct hid_report *hr)
 	return (nhr);
 }
 
+static void
+hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
+    int len)
+{
+
+
+}
+
 int
 hid_report_get_id(struct hid_report *hr)
 {
@@ -590,6 +648,24 @@ hid_field_get_usage_count(struct hid_field *hf)
 	return (hf->hf_count);
 }
 
+int
+hid_field_get_usage_min(struct hid_field *hf)
+{
+
+	assert(hf != NULL);
+
+	return (hf->hf_usage_min);
+}
+
+int
+hid_field_get_usage_max(struct hid_field *hf)
+{
+
+	assert(hf != NULL);
+
+	return (hf->hf_usage_max);
+}
+
 void
 hid_field_get_usage_value(struct hid_field *hf, int i, unsigned int *usage,
     int *value)
@@ -602,6 +678,18 @@ hid_field_get_usage_value(struct hid_field *hf, int i, unsigned int *usage,
 		*usage = hf->hf_usage[i];
 	if (value != NULL)
 		*value = hf->hf_value[i];
+}
+
+void
+hid_driver_register(struct hid_driver *hd)
+{
+	struct hid_driver *nhd;
+
+	nhd = malloc(sizeof(*nhd));
+	assert(nhd != NULL);
+	*nhd = *hd;
+
+	STAILQ_INSERT_TAIL(&hdlist, nhd, hd_next);
 }
 
 #if 0

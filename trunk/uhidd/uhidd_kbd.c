@@ -391,6 +391,7 @@ struct kbd_mods {
 	uint32_t mask, key;
 };
 
+#if 0
 #define	KBD_NMOD	8
 static struct kbd_mods kbd_mods[KBD_NMOD] = {
 	{MOD_CONTROL_L, 0xe0},
@@ -406,6 +407,7 @@ static struct kbd_mods kbd_mods[KBD_NMOD] = {
 static void	*kbd_task(void *arg);
 static void	kbd_write(struct hid_child *hc, int hid_key, int make);
 static void	kbd_process_keys(struct hid_child *hc);
+#endif
 
 /*
  * Translate HID code into PS/2 code and put codes into buffer b.
@@ -637,7 +639,8 @@ kbd_attach(struct hid_appcol *ha)
 		flags = hid_field_get_flags(hf);
 		if (flags & HIO_CONST)
 			continue;
-		hid_field_get_usage_value(hf, 0, &usage, NULL);
+		usage = hid_field_get_usage_min(hf);
+		printf("usage=%#x\n", usage);
 		/* 224 is LeftControl. */
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 224))
 			modifier_found = 1;
@@ -717,3 +720,15 @@ kbd_task(void *arg)
 	return (NULL);
 }
 #endif
+
+void
+kbd_driver_init(void)
+{
+	struct hid_driver hd;
+
+	hd.hd_match = kbd_match;
+	hd.hd_attach = kbd_attach;
+	hd.hd_recv = NULL;
+
+	hid_driver_register(&hd);
+}

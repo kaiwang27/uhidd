@@ -162,6 +162,9 @@ main(int argc, char **argv)
 	/* Write pid file. */
 	pidfile_write(pfh);
 
+	/* Register drivers. */
+	kbd_driver_init();
+
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
 		syslog(LOG_ERR, "can not alloc backend");
@@ -544,7 +547,7 @@ attach_hid_parent(struct hid_parent *hp)
 #if 0
 	struct hid_child *hc;
 #endif
-	hid_parser_t p;
+	struct hid_interface *hi;
 #if 0
 	hid_data_t d;
 	hid_item_t h, ch;
@@ -553,7 +556,7 @@ attach_hid_parent(struct hid_parent *hp)
 #endif
 
 	/* Check how many children we have. */
-	p = hid_parser_alloc(hp->rdesc, hp->rsz);
+	hi = hid_interface_alloc(hp->rdesc, hp->rsz);
 
 	return;
 
