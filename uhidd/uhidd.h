@@ -118,9 +118,10 @@ struct hid_interface {
 #define	HID_MATCH_DEVICE	20
 
 struct hid_driver {
-	int (*match)(struct hid_appcol *);
-	int (*attach)(struct hid_appcol *);
-	void (*recv)(struct hid_appcol *, struct hid_report *);
+	int (*hd_match)(struct hid_appcol *);
+	int (*hd_attach)(struct hid_appcol *);
+	void (*hd_recv)(struct hid_appcol *, struct hid_report *);
+	STAILQ_ENTRY(hid_driver) hd_next;
 };
 
 /*
@@ -323,6 +324,9 @@ int		hid_field_get_flags(struct hid_field *);
 int		hid_field_get_usage_count(struct hid_field *);
 void		hid_field_get_usage_value(struct hid_field *, int,
     unsigned int *, int *);
+int		hid_field_get_usage_min(struct hid_field *);
+int		hid_field_get_usage_max(struct hid_field *);
+void		hid_driver_register(struct hid_driver *);
 
 #if 0
 hid_data_t	hid_start_parse(hid_parser_t, int);
@@ -335,6 +339,7 @@ int		hid_get_data(const void *, const hid_item_t *);
 int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
 #endif
+void		kbd_driver_init(void);
 void		kbd_cleanup(struct hid_child *);
 void		kbd_recv(struct hid_child *, char *, int);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
