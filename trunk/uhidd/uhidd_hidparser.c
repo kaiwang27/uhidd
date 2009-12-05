@@ -43,6 +43,8 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 static void	hid_clear_local(struct hid_state *c);
 static void	hid_parser_init(struct hid_interface * p);
 static void	hid_parser_dump(struct hid_interface * p);
+static void	hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
+    char *, int);
 #if 0
 static int	hid_get_item_raw(hid_data_t s, hid_item_t *h);
 #endif
@@ -471,7 +473,7 @@ hid_parser_init(struct hid_interface *hi)
 			if (verbose)
 				printf("find matching driver\n");
 			mhd->hd_attach(ha);
-			exit(1);
+			ha->ha_hd = mhd;
 		} else {
 			if (verbose)
 				printf("no matching driver\n");
@@ -602,8 +604,66 @@ static void
 hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
     int len)
 {
+	struct hid_field *hf;
+	int start, range, value, m, i, j;
 
+	(void) len;
 
+	/* Discard data if no driver attached. */
+	if (ha->ha_hd == NULL)
+		return;
+
+	assert(hr->hr_id == 0 || hr->hr_id == *data);
+/* 	assert(ha->ha_hd->hd_recv != NULL); */
+
+	/* Skip report id. */
+	if (hr->hr_id != 0)
+		data++;
+
+	if (verbose > 1)
+		printf("received data len(%d)\n", len);
+
+	/*
+	 * "Extract" data to each hid_field of this hid_report.
+	 */
+	STAILQ_FOREACH(hf, &hr->hr_hflist[HID_INPUT], hf_next) {
+		for (i = 0; i < hf->hf_count; i++) {
+			start = (hf->hf_pos + i * hf->hf_size) / 8;
+			range = (hf->hf_pos + (i + 1) * hf->hf_size) / 8 -
+			    start;
+			value = 0;
+			for (j = 0; j <= range; j++)
+				value |= data[start + j] << (j * 8);
+			value >>= start % 8;
+			value &= (1 << hf->hf_size) - 1;
+			if (hf->hf_logic_min < 0) {
+				/* Sign extend. */
+				m = sizeof(value) * 8 - hf->hf_size;
+				value = (value << m) >> m;
+			}
+			if (hf->hf_flags & HIO_VARIABLE)
+				hf->hf_value[i] = value;
+			else {
+				/* Array. */
+				hf->hf_usage[i] = value;
+				if (value != 0)
+					hf->hf_value[i] = 1;
+				else
+					hf->hf_value[i] = 0;
+			}
+		}
+		if (verbose > 1 && ((hf->hf_flags & HIO_CONST) == 0)) {
+			printf("data: (%s)\n", hf->hf_flags & HIO_VARIABLE ?
+			    "variable" : "array");
+			for (i = 0; i < hf->hf_count; i++) {
+				printf("  usage=%#x value=%d\n",
+				    hf->hf_usage[i], hf->hf_value[i]);
+			}
+		}
+	}
+
+	if (ha->ha_hd->hd_recv != NULL)
+		ha->ha_hd->hd_recv(ha, hr);
 }
 
 int

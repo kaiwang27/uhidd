@@ -85,6 +85,8 @@ struct hid_field {
 	int hf_type;
 	int hf_usage_min;
 	int hf_usage_max;
+	int hf_logic_min;
+	int hf_logic_max;
 	unsigned int *hf_usage;
 	int *hf_value;
 	STAILQ_ENTRY(hid_field) hf_next;
@@ -101,6 +103,7 @@ struct hid_report {
 struct hid_appcol {
 	unsigned int ha_usage;
 	void *ha_data;
+	struct hid_driver *ha_hd;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
 	STAILQ_ENTRY(hid_appcol) ha_next;
 };
@@ -211,6 +214,7 @@ struct hid_parent {
 	struct libusb20_interface	*iface;
 	int				 vendor_id;
 	int				 product_id;
+	struct hid_interface		*hi;
 	int				 ndx;
 	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
@@ -312,6 +316,7 @@ int		hid_attach(struct hid_child *);
 void		hid_recv(struct hid_child *, char *, int);
 struct hid_interface *hid_interface_alloc(unsigned char *, int);
 void		hid_interface_free(struct hid_interface *);
+void		hid_interface_input_data(struct hid_interface *, char *, int);
 unsigned int	hid_appcol_get_usage(struct hid_appcol *);
 void		hid_appcol_set_private(struct hid_appcol *, void *);
 void		*hid_appcol_get_private(struct hid_appcol *);
