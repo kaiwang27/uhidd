@@ -669,6 +669,8 @@ kbd_attach(struct hid_appcol *ha)
 	return (0);
 }
 
+
+
 #if 0
 void
 kbd_recv(struct hid_child *hc, char *buf, int len)

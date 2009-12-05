@@ -67,17 +67,15 @@ static int	attach_hid_child(struct hid_child *hc);
 static void	child_recv(struct hid_child *hc, char *buf, int len);
 static void	dispatch(struct hid_parent *hp, char *buf, int len);
 static void	repair_report_desc(struct hid_child *hc);
-static void	*start_hid_parent(void *arg);
 #endif
+static void	*start_hid_parent(void *arg);
 static void	sighandler(int sig __unused);
 static void	terminate(int eval);
 
 int
 main(int argc, char **argv)
 {
-#if 0
 	struct hid_parent *hp;
-#endif
 	struct libusb20_backend *backend;
 	char *pid_file;
 	pid_t otherpid;
@@ -184,17 +182,17 @@ main(int argc, char **argv)
 	if (STAILQ_EMPTY(&hplist))
 		goto uhidd_end;
 
-#if 0
 	STAILQ_FOREACH(hp, &hplist, next) {
-		if (!STAILQ_EMPTY(&hp->hclist))
+/* 		if (!STAILQ_EMPTY(&hp->hclist)) */
+		if (hp->hi != NULL)
 		    pthread_create(&hp->thread, NULL, start_hid_parent,
 			(void *)hp);
 	}
 	STAILQ_FOREACH(hp, &hplist, next) {
-		if (!STAILQ_EMPTY(&hp->hclist))
+/* 		if (!STAILQ_EMPTY(&hp->hclist)) */
+		if (hp->hi != NULL)
 			pthread_join(hp->thread, NULL);
 	}
-#endif
 
 uhidd_end:
 
@@ -546,9 +544,6 @@ attach_hid_parent(struct hid_parent *hp)
 {
 #if 0
 	struct hid_child *hc;
-#endif
-	struct hid_interface *hi;
-#if 0
 	hid_data_t d;
 	hid_item_t h, ch;
 	int rid[_MAX_REPORT_IDS];
@@ -556,7 +551,7 @@ attach_hid_parent(struct hid_parent *hp)
 #endif
 
 	/* Check how many children we have. */
-	hi = hid_interface_alloc(hp->rdesc, hp->rsz);
+	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz);
 
 	return;
 
@@ -762,6 +757,7 @@ attach_hid_child(struct hid_child *hc)
 
 	return (0);
 }
+#endif
 
 static void *
 start_hid_parent(void *arg)
@@ -856,7 +852,8 @@ start_hid_parent(void *arg)
 					printf("%02d ", buf[i]);
 				putchar('\n');
 			}
-			dispatch(hp, buf, actlen);
+			hid_interface_input_data(hp->hi, buf, actlen);
+/* 			dispatch(hp, buf, actlen); */
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
 			if (verbose)
@@ -877,6 +874,7 @@ parent_end:
 	return (NULL);
 }
 
+#if 0
 static void
 dispatch(struct hid_parent *hp, char *buf, int len)
 {
