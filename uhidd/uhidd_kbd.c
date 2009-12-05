@@ -125,8 +125,8 @@ struct kbd_dev {
 };
 
 #define	KBD		hc->u.kd
-#define KBD_LOCK	pthread_mutex_lock(&KBD.kbd_mtx);
-#define KBD_UNLOCK	pthread_mutex_unlock(&KBD.kbd_mtx);
+#define KBD_LOCK	pthread_mutex_lock(&kd->kbd_mtx);
+#define KBD_UNLOCK	pthread_mutex_unlock(&kd->kbd_mtx);
 
 /*
  * HID code to PS/2 set 1 code translation table.
@@ -391,7 +391,6 @@ struct kbd_mods {
 	uint32_t mask, key;
 };
 
-#if 0
 #define	KBD_NMOD	8
 static struct kbd_mods kbd_mods[KBD_NMOD] = {
 	{MOD_CONTROL_L, 0xe0},
@@ -405,9 +404,8 @@ static struct kbd_mods kbd_mods[KBD_NMOD] = {
 };
 
 static void	*kbd_task(void *arg);
-static void	kbd_write(struct hid_child *hc, int hid_key, int make);
-static void	kbd_process_keys(struct hid_child *hc);
-#endif
+static void	kbd_write(struct kbd_dev *kd, int hid_key, int make);
+static void	kbd_process_keys(struct kbd_dev *kd);
 
 /*
  * Translate HID code into PS/2 code and put codes into buffer b.
@@ -422,18 +420,13 @@ do {				\
 	(n) ++;			\
 } while (0)
 
-#if 0
 static void
-kbd_write(struct hid_child *hc, int hid_key, int make)
+kbd_write(struct kbd_dev *kd, int hid_key, int make)
 {
-	struct hid_parent *hp;
 	int buf[32], *b, c, n;
 
-	hp = hc->parent;
-	assert(hp != NULL);
-
 	if (hid_key >= xsize) {
-		PRINT2("Invalid keycode(%d) received", hid_key);
+		printf("Invalid keycode(%d) received\n", hid_key);
 		return;
 	}
 
@@ -453,91 +446,90 @@ kbd_write(struct hid_child *hc, int hid_key, int make)
 	}
 
 	if (n > 0)
-		write(KBD.vkbd_fd, buf, n * sizeof(buf[0]));
+		write(kd->vkbd_fd, buf, n * sizeof(buf[0]));
 }
 
 static void
-kbd_process_keys(struct hid_child *hc)
+kbd_process_keys(struct kbd_dev *kd)
 {
 	uint32_t n_mod;
 	uint32_t o_mod;
 	uint8_t key;
 	int dtime, i, j;
 
-	n_mod = KBD.ndata.mod;
-	o_mod = KBD.odata.mod;
+	n_mod = kd->ndata.mod;
+	o_mod = kd->odata.mod;
 	if (n_mod != o_mod) {
 		for (i = 0; i < KBD_NMOD; i++) {
 			if ((n_mod & kbd_mods[i].mask) !=
 			    (o_mod & kbd_mods[i].mask)) {
-				kbd_write(hc, kbd_mods[i].key,
+				kbd_write(kd, kbd_mods[i].key,
 				    (n_mod & kbd_mods[i].mask));
 			}
 		}
 	}
 
 	/* Check for released keys. */
-	for (i = 0; i < KBD.key_cnt; i++) {
-		key = KBD.odata.keycode[i];
+	for (i = 0; i < kd->key_cnt; i++) {
+		key = kd->odata.keycode[i];
 		if (key == 0) {
 			continue;
 		}
-		for (j = 0; j < KBD.key_cnt; j++) {
-			if (KBD.ndata.keycode[j] == 0) {
+		for (j = 0; j < kd->key_cnt; j++) {
+			if (kd->ndata.keycode[j] == 0) {
 				continue;
 			}
-			if (key == KBD.ndata.keycode[j]) {
+			if (key == kd->ndata.keycode[j]) {
 				goto rfound;
 			}
 		}
-		kbd_write(hc, key, 0);
+		kbd_write(kd, key, 0);
 	rfound:
 		;
 	}
 
 	/* Check for pressed keys. */
-	for (i = 0; i < KBD.key_cnt; i++) {
-		key = KBD.ndata.keycode[i];
+	for (i = 0; i < kd->key_cnt; i++) {
+		key = kd->ndata.keycode[i];
 		if (key == 0) {
 			continue;
 		}
-		KBD.ndata.time[i] = KBD.now + KBD.delay1;
-		for (j = 0; j < KBD.key_cnt; j++) {
-			if (KBD.odata.keycode[j] == 0) {
+		kd->ndata.time[i] = kd->now + kd->delay1;
+		for (j = 0; j < kd->key_cnt; j++) {
+			if (kd->odata.keycode[j] == 0) {
 				continue;
 			}
-			if (key == KBD.odata.keycode[j]) {
+			if (key == kd->odata.keycode[j]) {
 				/*
 				 * Key is still pressed.
 				 */
-				KBD.ndata.time[i] = KBD.odata.time[j];
-				dtime = (KBD.odata.time[j] - KBD.now);
+				kd->ndata.time[i] = kd->odata.time[j];
+				dtime = (kd->odata.time[j] - kd->now);
 				if (!(dtime & 0x80000000)) {
 					/* time has not elapsed */
 					goto pfound;
 				}
-				KBD.ndata.time[i] = KBD.now + KBD.delay2;
+				kd->ndata.time[i] = kd->now + kd->delay2;
 				break;
 			}
 		}
-		kbd_write(hc, key, 1);
+		kbd_write(kd, key, 1);
 
 		/*
                  * If any other key is presently down, force its repeat to be
                  * well in the future (100s).  This makes the last key to be
                  * pressed do the autorepeat.
                  */
-		for (j = 0; j < KBD.key_cnt; j++) {
+		for (j = 0; j < kd->key_cnt; j++) {
 			if (j != i)
-				KBD.ndata.time[j] = KBD.now + (100 * 1000);
+				kd->ndata.time[j] = kd->now + (100 * 1000);
 		}
 	pfound:
 		;
 	}
 
-	KBD.odata = KBD.ndata;
+	kd->odata = kd->ndata;
 }
-#endif
 
 static int
 kbd_match(struct hid_appcol *ha)
@@ -640,7 +632,6 @@ kbd_attach(struct hid_appcol *ha)
 		if (flags & HIO_CONST)
 			continue;
 		usage = hid_field_get_usage_min(hf);
-		printf("usage=%#x\n", usage);
 		/* 224 is LeftControl. */
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 224))
 			modifier_found = 1;
@@ -661,15 +652,53 @@ kbd_attach(struct hid_appcol *ha)
 	kd->delay1 = KB_DELAY1;
 	kd->delay2 = KB_DELAY2;
 
-#if 0
 	pthread_mutex_init(&kd->kbd_mtx, NULL);
 	pthread_create(&kd->kbd_task, NULL, kbd_task, kd);
-#endif
 
 	return (0);
 }
 
+void
+kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
+{
+	struct hid_field *hf;
+	struct kbd_dev *kd;
+	unsigned int usage;
+	int cnt, flags, i;
 
+	kd = hid_appcol_get_private(ha);
+	assert(kd != NULL);
+
+	hf = NULL;
+	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
+		flags = hid_field_get_flags(hf);
+		if (flags & HIO_CONST)
+			continue;
+		usage = hid_field_get_usage_min(hf);
+		if (usage == HID_USAGE2(HUP_KEYBOARD, 224)) {
+			KBD_LOCK;
+			kd->ndata.mod = 0;
+			for (i = 0; i < hf->hf_count; i++)
+				kd->ndata.mod |= hf->hf_value[i] << i;
+			if (verbose)
+				printf("kd->ndata.mod=%d\n", kd->ndata.mod);
+			KBD_UNLOCK;
+		}
+		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
+			KBD_LOCK;
+			cnt = 0;
+			for (i = 0; i < hf->hf_count; i++)
+				kd->ndata.keycode[i] = hf->hf_usage[i];
+			if (verbose) {
+				printf("key codes: ");
+				for (i = 0; i < hf->hf_count; i++)
+					printf("0x%02x ", kd->ndata.keycode[i]);
+				putchar('\n');
+			}
+			KBD_UNLOCK;
+		}
+	}
+}
 
 #if 0
 void
@@ -703,25 +732,25 @@ kbd_cleanup(struct hid_child *hc)
 	memset(kd->ndata.keycode, 0, sizeof(kd->ndata.keycode));
 	kbd_process_keys(hc);
 }
+#endif
 
 static void *
 kbd_task(void *arg)
 {
-	struct hid_child *hc;
+	struct kbd_dev *kd;
 
-	hc = arg;
-	assert(hc != NULL);
+	kd = arg;
+	assert(kd != NULL);
 
 	for (kd->now = 0; ; kd->now += 25) {
 		KBD_LOCK;
-		kbd_process_keys(hc);
+		kbd_process_keys(kd);
 		KBD_UNLOCK;
 		usleep(25 * 1000);	/* wake up every 25ms. */
 	}
 
 	return (NULL);
 }
-#endif
 
 void
 kbd_driver_init(void)
@@ -730,7 +759,7 @@ kbd_driver_init(void)
 
 	hd.hd_match = kbd_match;
 	hd.hd_attach = kbd_attach;
-	hd.hd_recv = NULL;
+	hd.hd_recv = kbd_recv;
 
 	hid_driver_register(&hd);
 }

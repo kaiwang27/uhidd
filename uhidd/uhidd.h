@@ -346,7 +346,7 @@ void		hid_set_data(void *, const hid_item_t *, int);
 #endif
 void		kbd_driver_init(void);
 void		kbd_cleanup(struct hid_child *);
-void		kbd_recv(struct hid_child *, char *, int);
+void		kbd_recv(struct hid_appcol *ha, struct hid_report *hr);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
 int		mouse_attach(struct hid_child *);
 void		mouse_recv(struct hid_child *, char *, int);
