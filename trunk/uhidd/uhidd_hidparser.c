@@ -607,14 +607,12 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
 	struct hid_field *hf;
 	int start, range, value, m, i, j;
 
-	(void) len;
-
 	/* Discard data if no driver attached. */
 	if (ha->ha_hd == NULL)
 		return;
 
 	assert(hr->hr_id == 0 || hr->hr_id == *data);
-/* 	assert(ha->ha_hd->hd_recv != NULL); */
+	assert(ha->ha_hd->hd_recv != NULL);
 
 	/* Skip report id. */
 	if (hr->hr_id != 0)
@@ -622,6 +620,12 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
 
 	if (verbose > 1)
 		printf("received data len(%d)\n", len);
+	if (verbose > 2) {
+		printf("received data: ");
+		for (i = 0; i < len; i++)
+			printf("0x%02x ", data[i]);
+		printf("\n");
+	}
 
 	/*
 	 * "Extract" data to each hid_field of this hid_report.
@@ -634,7 +638,7 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
 			value = 0;
 			for (j = 0; j <= range; j++)
 				value |= data[start + j] << (j * 8);
-			value >>= start % 8;
+			value >>= (hf->hf_pos + i * hf->hf_size) % 8;
 			value &= (1 << hf->hf_size) - 1;
 			if (hf->hf_logic_min < 0) {
 				/* Sign extend. */
