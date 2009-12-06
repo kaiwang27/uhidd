@@ -3,7 +3,7 @@ PROG=	uhidd
 #	uhidd_kbd.c uhidd.c uhidd_mouse.c lex.l parser.y y.tab.h	\
 #	usage_in_page.c usage_page.c
 SRCS=	uhidd.c uhidd_hidparser.c uhidd_hidump.c uhidd_kbd.c lex.l \
-	parser.y y.tab.h usage_in_page.c usage_page.c
+	uhidd_mouse.c parser.y y.tab.h usage_in_page.c usage_page.c
 
 GENSRCS=	usage_in_page.c usage_page.c
 CLEANFILES=	${GENSRCS}
