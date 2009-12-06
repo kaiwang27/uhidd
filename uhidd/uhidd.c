@@ -162,6 +162,7 @@ main(int argc, char **argv)
 
 	/* Register drivers. */
 	kbd_driver_init();
+	mouse_driver_init();
 
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {

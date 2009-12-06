@@ -37,19 +37,48 @@ __FBSDID("$FreeBSD $");
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include "uhidd.h"
 
-int
-mouse_attach(struct hid_child *hc)
+/*
+ * Mouse device.
+ */
+
+#define	BUTTON_MAX	31
+
+struct mouse_dev {
+	int cons_fd;
+#if 0
+	hid_item_t x;
+	hid_item_t y;
+	hid_item_t wheel;
+	hid_item_t btn[BUTTON_MAX];
+	int btn_cnt;
+	int flags;
+#endif
+};
+
+static int
+mouse_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
-	int i;
+	unsigned int u;
 
-	hp = hc->parent;
-	assert(hp != NULL);
+	u = hid_appcol_get_usage(ha);
+	if (u == HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_MOUSE))
+		return (HID_MATCH_GENERAL);
 
+	return (HID_MATCH_NONE);
+}
+
+static int
+mouse_attach(struct hid_appcol *ha)
+{
+	struct mouse_dev *md;
+
+#if 0
 	hc->u.md.cons_fd = open("/dev/consolectl", O_RDWR);
 	if (hc->u.md.cons_fd < 0) {
 		PRINT2("could not open /dev/consolectl: %s", strerror(errno));
@@ -113,10 +142,25 @@ next:
 	hc->u.md.btn_cnt = i;
 	if (verbose)
 		PRINT2("%d buttons\n", hc->u.md.btn_cnt);
+#endif
+
+	if ((md = calloc(1, sizeof(*md))) == NULL) {
+		syslog(LOG_ERR, "calloc failed in mouse_attach: %m");
+		return (-1);
+	}
+
+	hid_appcol_set_private(ha, md);
+
+	md->cons_fd = open("/dev/consolectl", O_RDWR);
+	if (md->cons_fd < 0) {
+		syslog(LOG_ERR, "could not open /dev/consolectl: %m");
+		return (-1);
+	}
 
 	return (0);
 }
 
+#if 0
 void
 mouse_recv(struct hid_child *hc, char *buf, int len)
 {
@@ -157,4 +201,97 @@ mouse_recv(struct hid_child *hc, char *buf, int len)
 	if (ioctl(hc->u.md.cons_fd, CONS_MOUSECTL, &mi) < 0)
 		PRINT2("could not submit mouse data: ioctl failed: %s\n",
 		    strerror(errno));
+}
+#endif
+
+static void
+mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
+{
+	struct hid_field *hf;
+	struct mouse_dev *md;
+	struct mouse_info mi;
+	unsigned int usage, up;
+	int has_wheel, has_twheel, has_z, flags;
+	int b, btn, dx, dy, dw, dt, dz, i;
+
+	md = hid_appcol_get_private(ha);
+	assert(md != NULL);
+
+	dx = dy = dw = dt = dz = 0;
+	has_wheel = has_twheel = has_z = 0;
+	btn = 0;
+	hf = NULL;
+	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
+		flags = hid_field_get_flags(hf);
+		if (flags & HIO_CONST || (flags & HIO_VARIABLE) == 0)
+			continue;
+		for (i = 0; i < hf->hf_count; i++) {
+			usage = HID_USAGE(hf->hf_usage[i]);
+			up = HID_PAGE(hf->hf_usage[i]);
+			if (up == HUP_BUTTON) {
+				if (usage < BUTTON_MAX && hf->hf_value[i]) {
+					b = usage - 1;
+					if (b == 1)
+						b = 2;
+					else if (b == 2)
+						b = 1;
+					btn |= (1 << b);
+				}
+				continue;
+			}
+
+			switch (hf->hf_usage[i]) {
+			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_X):
+				dx = hf->hf_value[i];
+				break;
+			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Y):
+				dy = hf->hf_value[i];
+				break;
+			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_WHEEL):
+				has_wheel = 1;
+				dw = -hf->hf_value[i];
+				break;
+			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_TWHEEL):
+				has_twheel = 1;
+				dt = -hf->hf_value[i];
+				break;
+			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Z):
+				has_z = 1;
+				dz = -hf->hf_value[i];
+				break;
+			}
+		}
+	}
+
+	mi.operation = MOUSE_ACTION;
+	mi.u.data.x = dx;
+	mi.u.data.y = dy;
+	mi.u.data.buttons = btn;
+	if (has_wheel)
+		mi.u.data.z = dw;
+	else if (has_twheel)
+		mi.u.data.z = dt;
+	else if (has_z)
+		mi.u.data.z = dz;
+	else
+		mi.u.data.z = 0;
+
+	if (ioctl(md->cons_fd, CONS_MOUSECTL, &mi) < 0)
+		syslog(LOG_ERR, "could not submit mouse data: ioctl failed:"
+		    " %m");
+
+	if (verbose > 1)
+		printf("btn=%#x dx=%d dy=%d dw=%d\n", btn, dx, dy, dw);
+}
+
+void
+mouse_driver_init(void)
+{
+	struct hid_driver hd;
+
+	hd.hd_match = mouse_match;
+	hd.hd_attach = mouse_attach;
+	hd.hd_recv = mouse_recv;
+
+	hid_driver_register(&hd);
 }

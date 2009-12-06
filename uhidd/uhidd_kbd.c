@@ -546,20 +546,12 @@ kbd_match(struct hid_appcol *ha)
 static int
 kbd_attach(struct hid_appcol *ha)
 {
-#if 0
-	struct hid_parent *hp;
-#endif
 	struct hid_report *hr;
 	struct hid_field *hf;
 	struct kbd_dev *kd;
 	struct stat sb;
 	unsigned int usage;
 	int modifier_found, key_found, flags;
-
-#if 0
-	hp = hc->parent;
-	assert(hp != NULL);
-#endif
 
 	if ((kd = calloc(1, sizeof(*kd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in kbd_attach: %m");

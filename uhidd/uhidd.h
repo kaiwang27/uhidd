@@ -55,6 +55,7 @@ struct hid_state {
 	unsigned int usage_page;
 	int logical_minimum;
 	int logical_maximum;
+	int logminsize;
 	int physical_minimum;
 	int physical_maximum;
 	int unit_exponent;
@@ -162,22 +163,6 @@ struct uhidd_config {
 };
 
 #if 0
-/*
- * Mouse device.
- */
-
-#define	BUTTON_MAX	31
-
-struct mouse_dev {
-	int cons_fd;
-	hid_item_t x;
-	hid_item_t y;
-	hid_item_t wheel;
-	hid_item_t btn[BUTTON_MAX];
-	int btn_cnt;
-	int flags;
-};
-
 /*
  * General HID device.
  */
@@ -348,8 +333,7 @@ void		kbd_driver_init(void);
 void		kbd_cleanup(struct hid_child *);
 void		kbd_recv(struct hid_appcol *ha, struct hid_report *hr);
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
-int		mouse_attach(struct hid_child *);
-void		mouse_recv(struct hid_child *, char *, int);
+void		mouse_driver_init(void);
 struct device_config *config_find_device(int, int, int);
 int		config_attach_mouse(struct hid_parent *);
 int		config_attach_kbd(struct hid_parent *);

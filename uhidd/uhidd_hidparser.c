@@ -202,6 +202,14 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 	hf->hf_pos = hr->hr_pos[kind];
 	hf->hf_count = hs->report_count;
 	hf->hf_size = hs->report_size;
+	if (hs->logical_minimum >= hs->logical_maximum) {
+		if (hs->logminsize == 1)
+			hs->logical_minimum = (int8_t) hs->logical_minimum;
+		else if (hs->logminsize == 2)
+			hs->logical_minimum = (int16_t) hs->logical_minimum;
+	}
+	hf->hf_logic_min = hs->logical_minimum;
+	hf->hf_logic_max = hs->logical_maximum;
 	hf->hf_usage = calloc(hf->hf_count, sizeof(*hf->hf_usage));
 	hf->hf_value = calloc(hf->hf_count, sizeof(*hf->hf_value));
 	if (hf->hf_usage == NULL || hf->hf_value == NULL)
@@ -345,6 +353,7 @@ hid_parser_init(struct hid_interface *hi)
 				break;
 			case 1:
 				hs->logical_minimum = dval;
+				hs->logminsize = bSize;
 				break;
 			case 2:
 				hs->logical_maximum = dval;
