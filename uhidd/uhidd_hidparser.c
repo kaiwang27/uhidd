@@ -44,7 +44,7 @@ static void	hid_clear_local(struct hid_state *c);
 static void	hid_parser_init(struct hid_interface * p);
 static void	hid_parser_dump(struct hid_interface * p);
 static void	hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
-    char *, int);
+    uint8_t *, int);
 #if 0
 static int	hid_get_item_raw(hid_data_t s, hid_item_t *h);
 #endif
@@ -215,11 +215,9 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 	if (hf->hf_usage == NULL || hf->hf_value == NULL)
 		err(1, "hid_parser: calloc");
 
-	if (hf->hf_flags & HIO_VARIABLE) {
-		for (i = 0; i < nusage && i < hf->hf_count; i++)
-			hf->hf_usage[i] = usages[i];
-	}
 	hf->hf_usage_page = hs->usage_page;
+	for (i = 0; i < nusage; i++)
+		hf->hf_nusage[i] = usages[i];
 	hf->hf_usage_min = hs->usage_minimum;
 	hf->hf_usage_max = hs->usage_maximum;
 
@@ -609,11 +607,11 @@ hid_appcol_get_next_report(struct hid_appcol *ha, struct hid_report *hr)
 }
 
 static void
-hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
+hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data,
     int len)
 {
 	struct hid_field *hf;
-	int start, range, value, m, i, j;
+	int start, range, value, m, i, j, ndx;
 
 	/* Discard data if no driver attached. */
 	if (ha->ha_hd == NULL)
@@ -653,15 +651,25 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
 				m = sizeof(value) * 8 - hf->hf_size;
 				value = (value << m) >> m;
 			}
-			if (hf->hf_flags & HIO_VARIABLE)
+			if (hf->hf_flags & HIO_VARIABLE) {
+				hf->hf_usage[i] = hf->hf_nusage[i];
 				hf->hf_value[i] = value;
-			else {
+			} else {
 				/* Array. */
-				hf->hf_usage[i] = value | hf->hf_usage_page;
-				if (value != 0)
-					hf->hf_value[i] = 1;
-				else
+				if (value < hf->hf_logic_min ||
+				    value > hf->hf_logic_max) {
+					hf->hf_usage[i] = 0;
 					hf->hf_value[i] = 0;
+					continue;
+				}
+				ndx = value - hf->hf_logic_min;
+				if (ndx >= 0 && ndx < MAXUSAGE) {
+					hf->hf_usage[i] = hf->hf_nusage[ndx];
+					if (value != 0) {
+						hf->hf_value[i] = 1;
+					} else
+						hf->hf_value[i] = 0;
+				}
 			}
 		}
 		if (verbose > 1 && ((hf->hf_flags & HIO_CONST) == 0)) {
@@ -709,6 +717,15 @@ hid_field_get_flags(struct hid_field *hf)
 	assert(hf != NULL);
 
 	return (hf->hf_flags);
+}
+
+unsigned
+hid_field_get_usage_page(struct hid_field *hf)
+{
+
+	assert(hf != NULL);
+
+	return (hf->hf_usage_page >> 16);
 }
 
 int

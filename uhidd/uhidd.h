@@ -89,6 +89,7 @@ struct hid_field {
 	int hf_usage_max;
 	int hf_logic_min;
 	int hf_logic_max;
+	unsigned int hf_nusage[MAXUSAGE];
 	unsigned int *hf_usage;
 	int *hf_value;
 	STAILQ_ENTRY(hid_field) hf_next;
@@ -313,6 +314,7 @@ int		hid_report_get_id(struct hid_report *);
 struct hid_field *hid_report_get_next_field(struct hid_report *,
     struct hid_field *, enum hid_kind);
 int		hid_field_get_flags(struct hid_field *);
+unsigned	hid_field_get_usage_page(struct hid_field *);
 int		hid_field_get_usage_count(struct hid_field *);
 void		hid_field_get_usage_value(struct hid_field *, int,
     unsigned int *, int *);
