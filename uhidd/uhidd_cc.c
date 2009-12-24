@@ -32,6 +32,9 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <dev/usb/usb.h>
+#include <dev/usb/usbhid.h>
+#include <string.h>
 #include "uhidd.h"
 
 #define	HUG_CONSUMER_CONTROL		0x0001
@@ -139,8 +142,6 @@ __FBSDID("$FreeBSD$");
 #define	HUG_AC_REPLY			0x0289
 #define	HUG_AC_FORWARDMSG		0x028B
 #define	HUG_AC_SEND			0x028C
-
-
 
 #if 0
 static int32_t const	x[] =
@@ -334,10 +335,21 @@ static int32_t const	x[] =
 /* Stop                                B7 */  -1,   /* None */
 /* Eject                               B8 */  -1,   /* None */
 /* Random Play                         B9 */  -1,   /* None */
+}
 #endif
 
+static int
+cc_tr(int hid_key)
+{
 
-
+	switch (hid_key) {
+	case HUG_VOLUME_UP:
+		return (0x1e);
+	case HUG_VOLUME_DOWN:
+		return (0x24);
+	default:
+		return (-1);
+	}
 }
 
 static int
@@ -356,12 +368,61 @@ static int
 cc_attach(struct hid_appcol *ha)
 {
 
+	if (kbd_attach(ha) < 0)
+		return (-1);
+	kbd_set_tr(ha, cc_tr);
 
+	return (0);
 }
+
+/* XXX */
+#define MAX_KEYCODE 256
 
 static void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
+	struct hid_field *hf;
+	unsigned int usage;
+	int i, value, cnt, flags, total;
+	uint8_t keycodes[MAX_KEYCODE];
 
+	total = 0;
+	cnt = 0;
+	memset(keycodes, 0, sizeof(keycodes));
 
+	hf = NULL;
+	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
+		flags = hid_field_get_flags(hf);
+		if (flags & HIO_CONST)
+			continue;
+		
+		for (i = 0; i < hf->hf_count; i++) {
+			hid_field_get_usage_value(hf, i, &usage, &value);
+			if (HID_PAGE(usage) != HUP_CONSUMER)
+				continue;
+			if (total >= MAX_KEYCODE)
+				continue;
+			total++;
+			if (value) {
+				if (cnt >= MAX_KEYCODE)
+					continue;
+				keycodes[cnt++] = HID_USAGE(usage);
+			}
+		}
+	}
+
+	if (total > 0)
+		kbd_input(ha, 0, keycodes, total);
+}
+
+void
+cc_driver_init(void)
+{
+	struct hid_driver hd;
+
+	hd.hd_match = cc_match;
+	hd.hd_attach = cc_attach;
+	hd.hd_recv = cc_recv;
+
+	hid_driver_register(&hd);
 }

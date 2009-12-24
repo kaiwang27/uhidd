@@ -87,7 +87,7 @@ __FBSDID("$FreeBSD $");
  * Keyboard device.
  */
 
-#define	MAX_KEYCODE	16
+#define	MAX_KEYCODE	256
 
 struct kbd_data {
 	uint8_t mod;
@@ -107,10 +107,6 @@ struct kbd_data {
 
 struct kbd_dev {
 	int vkbd_fd;
-#if 0
-	hid_item_t mods;
-	hid_item_t keys;
-#endif
 	int key_cnt;
 	struct kbd_data ndata;
 	struct kbd_data odata;
@@ -119,6 +115,7 @@ struct kbd_dev {
 	uint32_t now;
 	int delay1;
 	int delay2;
+	int (*kbd_tr)(int);	/* Keycode translate function. */
 
 #define KB_DELAY1	500
 #define KB_DELAY2	100
@@ -420,18 +417,28 @@ do {				\
 	(n) ++;			\
 } while (0)
 
+static int
+kbd_hid2key(int hid_key)
+{
+
+	if (hid_key >= xsize) {
+		printf("Invalid keycode(%d) received\n", hid_key);
+		return (-1);
+	}
+
+	return (x[hid_key]);
+}
+
 static void
 kbd_write(struct kbd_dev *kd, int hid_key, int make)
 {
 	int buf[32], *b, c, n;
 
-	if (hid_key >= xsize) {
-		printf("Invalid keycode(%d) received\n", hid_key);
-		return;
-	}
+	assert(kd->kbd_tr != NULL);
 
-	if ((c = x[hid_key]) == -1)
-		return; /* HID code translation is not defined */
+	/* Ignore unmapped keys. */
+	if ((c = kd->kbd_tr(hid_key)) == -1)
+		return;
 
 	n = 0;
 	b = buf;
@@ -543,15 +550,19 @@ kbd_match(struct hid_appcol *ha)
 	return (HID_MATCH_NONE);
 }
 
-static int
+int
 kbd_attach(struct hid_appcol *ha)
 {
+#if 0
 	struct hid_report *hr;
 	struct hid_field *hf;
+#endif
 	struct kbd_dev *kd;
 	struct stat sb;
+#if 0
 	unsigned int usage;
 	int modifier_found, key_found, flags;
+#endif
 
 	if ((kd = calloc(1, sizeof(*kd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in kbd_attach: %m");
@@ -606,6 +617,7 @@ kbd_attach(struct hid_appcol *ha)
 		PRINT2("warning: no keycode array\n");
 #endif
 
+#if 0
 	hr = hid_appcol_get_next_report(ha, NULL);
 	if (hr == NULL) {
 		syslog(LOG_ERR, "keyboard child device doesn't have any "
@@ -640,9 +652,13 @@ kbd_attach(struct hid_appcol *ha)
 		    "attach failed");
 		return (-1);
 	}
+#endif
+
 	/* TODO: These should be tunable. */
 	kd->delay1 = KB_DELAY1;
 	kd->delay2 = KB_DELAY2;
+
+	kbd_set_tr(ha, kbd_hid2key);
 
 	pthread_mutex_init(&kd->kbd_mtx, NULL);
 	pthread_create(&kd->kbd_task, NULL, kbd_task, kd);
@@ -654,13 +670,13 @@ void
 kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
-	struct kbd_dev *kd;
 	unsigned int usage;
 	int cnt, flags, i;
+	uint8_t mod;
+	uint8_t keycodes[MAX_KEYCODE];	
 
-	kd = hid_appcol_get_private(ha);
-	assert(kd != NULL);
-
+	mod = 0;
+	cnt = 0;
 	hf = NULL;
 	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
 		flags = hid_field_get_flags(hf);
@@ -668,28 +684,53 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 			continue;
 		usage = hid_field_get_usage_min(hf);
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 224)) {
-			KBD_LOCK;
-			kd->ndata.mod = 0;
 			for (i = 0; i < hf->hf_count; i++)
-				kd->ndata.mod |= hf->hf_value[i] << i;
+				mod |= hf->hf_value[i] << i;
 			if (verbose)
-				printf("kd->ndata.mod=%d\n", kd->ndata.mod);
-			KBD_UNLOCK;
+				printf("mod=%u\n", mod);
 		}
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
-			KBD_LOCK;
-			cnt = 0;
-			for (i = 0; i < hf->hf_count; i++)
-				kd->ndata.keycode[i] = hf->hf_usage[i];
+			cnt = hf->hf_count;
+			for (i = 0; i < cnt; i++)
+				keycodes[i] = HID_USAGE(hf->hf_usage[i]);
 			if (verbose) {
 				printf("key codes: ");
 				for (i = 0; i < hf->hf_count; i++)
-					printf("0x%02x ", kd->ndata.keycode[i]);
+					printf("0x%02x ", keycodes[i]);
 				putchar('\n');
 			}
-			KBD_UNLOCK;
 		}
 	}
+
+	kbd_input(ha, mod, keycodes, cnt);
+}
+
+void
+kbd_input(struct hid_appcol *ha, uint8_t mod, uint8_t *keycodes, int key_cnt)
+{
+	struct kbd_dev *kd;
+	int i;
+
+	kd = hid_appcol_get_private(ha);
+	assert(kd != NULL);
+
+	KBD_LOCK;
+	kd->ndata.mod = mod;
+	for (i = 0; i < key_cnt; i++)
+		kd->ndata.keycode[i] = keycodes[i];
+	kd->key_cnt = key_cnt;
+	KBD_UNLOCK;
+}
+
+void
+kbd_set_tr(struct hid_appcol *ha, int (*tr)(int))
+{
+	struct kbd_dev *kd;
+
+	kd = hid_appcol_get_private(ha);
+	assert(kd != NULL);
+
+	kd->kbd_tr = tr;
 }
 
 #if 0

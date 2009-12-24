@@ -84,6 +84,7 @@ struct hid_field {
 	int hf_count;
 	int hf_size;
 	int hf_type;
+	int hf_usage_page;
 	int hf_usage_min;
 	int hf_usage_max;
 	int hf_logic_min;
@@ -293,6 +294,7 @@ extern const char *config_file;
  * Prototypes.
  */
 
+void		cc_driver_init(void);
 void		dump_report_desc(unsigned char *, int);
 void		find_device_hidaction(struct hid_child *);
 void		find_global_hidaction(struct hid_child *);
@@ -329,9 +331,12 @@ int		hid_get_data(const void *, const hid_item_t *);
 int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
 void		hid_set_data(void *, const hid_item_t *, int);
 #endif
+int		kbd_attach(struct hid_appcol *);
 void		kbd_driver_init(void);
 void		kbd_cleanup(struct hid_child *);
-void		kbd_recv(struct hid_appcol *ha, struct hid_report *hr);
+void		kbd_input(struct hid_appcol *, uint8_t, uint8_t *, int);
+void		kbd_recv(struct hid_appcol *, struct hid_report *);
+void		kbd_set_tr(struct hid_appcol *, int (*)(int));
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
 void		mouse_driver_init(void);
 struct device_config *config_find_device(int, int, int);
