@@ -216,11 +216,10 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 		err(1, "hid_parser: calloc");
 
 	if (hf->hf_flags & HIO_VARIABLE) {
-		for (i = 0; i < nusage && i < hf->hf_count; i++) {
+		for (i = 0; i < nusage && i < hf->hf_count; i++)
 			hf->hf_usage[i] = usages[i];
-			printf("hf->hf_usage[%d]=%#x\n", i, usages[i]);
-		}
 	}
+	hf->hf_usage_page = hs->usage_page;
 	hf->hf_usage_min = hs->usage_minimum;
 	hf->hf_usage_max = hs->usage_maximum;
 
@@ -658,7 +657,7 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, char *data,
 				hf->hf_value[i] = value;
 			else {
 				/* Array. */
-				hf->hf_usage[i] = value;
+				hf->hf_usage[i] = value | hf->hf_usage_page;
 				if (value != 0)
 					hf->hf_value[i] = 1;
 				else
