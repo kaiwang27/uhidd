@@ -407,7 +407,7 @@ static void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
-	unsigned int usage;
+	unsigned int usage, up;
 	int i, value, cnt, flags, total;
 	uint8_t keycodes[MAX_KEYCODE];
 
@@ -422,9 +422,10 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 			continue;
 		
 		for (i = 0; i < hf->hf_count; i++) {
-			hid_field_get_usage_value(hf, i, &usage, &value);
-			if (HID_PAGE(usage) != HUP_CONSUMER)
+			up = hid_field_get_usage_page(hf);
+			if (up != HUP_CONSUMER)
 				continue;
+			hid_field_get_usage_value(hf, i, &usage, &value);
 			if (total >= MAX_KEYCODE)
 				continue;
 			total++;
