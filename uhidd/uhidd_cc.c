@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
+#include <stdio.h>
 #include <string.h>
 #include "uhidd.h"
 
@@ -142,6 +143,16 @@ __FBSDID("$FreeBSD$");
 #define	HUG_AC_REPLY			0x0289
 #define	HUG_AC_FORWARDMSG		0x028B
 #define	HUG_AC_SEND			0x028C
+
+#if 0
+static uint8_t free_keys[] =
+{
+	0x54, 0x55, 0x5A, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x6F, 0x71, 0x72, 0x74,
+	0x75, 0x7A, 0x7C, 0x7F
+};
+#endif
+
+/* Free KEY: 0x54 0x5A 0x5F 0x60 0x62 */
 
 #if 0
 static int32_t const	x[] =
@@ -342,11 +353,25 @@ static int
 cc_tr(int hid_key)
 {
 
+	/*
+	 * A pre-defined key translation table.
+	 */
+
 	switch (hid_key) {
 	case HUG_VOLUME_UP:
-		return (0x1e);
+		return (0x5A);
 	case HUG_VOLUME_DOWN:
-		return (0x24);
+		return (0x5F);
+	case HUG_PLAYPAUSE:
+		return (0x60);
+	case HUG_STOP:
+		return (0x62);
+	case HUG_MUTE:
+		return (0x63);
+	case HUG_PREVIOUS_TRACK:
+		return (0x6F);
+	case HUG_NEXT_TRACK:
+		return (0x71);
 	default:
 		return (-1);
 	}
@@ -411,8 +436,16 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
-	if (total > 0)
+	if (total > 0) {
+		printf("total = %d\n", total);
+		if (cnt == 0)
+			printf("0\n");
+		else
+			for (i = 0; i < cnt; i++)
+				printf("0x%02X ", keycodes[i]);
+		putchar('\n');
 		kbd_input(ha, 0, keycodes, total);
+	}
 }
 
 void
