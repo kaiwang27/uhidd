@@ -457,6 +457,7 @@ cc_driver_init(void)
 	hd.hd_match = cc_match;
 	hd.hd_attach = cc_attach;
 	hd.hd_recv = cc_recv;
+	hd.hd_recv_raw = NULL;
 
 	hid_driver_register(&hd);
 }
