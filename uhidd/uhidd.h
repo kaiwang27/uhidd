@@ -127,6 +127,7 @@ struct hid_driver {
 	int (*hd_match)(struct hid_appcol *);
 	int (*hd_attach)(struct hid_appcol *);
 	void (*hd_recv)(struct hid_appcol *, struct hid_report *);
+	void (*hd_recv_raw)(struct hid_appcol *, uint8_t *, int);
 	STAILQ_ENTRY(hid_driver) hd_next;
 };
 
@@ -165,15 +166,6 @@ struct uhidd_config {
 };
 
 #if 0
-/*
- * General HID device.
- */
-
-struct hid_dev {
-	int hidctl_fd;
-	char *name;
-};
-
 struct hidaction {
 	struct hidaction_config *conf;
 	hid_item_t item;
