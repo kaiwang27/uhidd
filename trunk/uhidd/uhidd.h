@@ -107,6 +107,7 @@ struct hid_appcol {
 	unsigned int ha_usage;
 	void *ha_data;
 	struct hid_driver *ha_hd;
+	struct hid_interface *ha_hi;
 	unsigned char ha_rdesc[_MAX_RDESC_SIZE];
 	int ha_rsz;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
@@ -189,8 +190,6 @@ enum uhidd_ctype {
 	UHIDD_HID
 };
 
-struct hid_child;
-
 struct hid_parent {
 	const char			*dev;
 	struct libusb20_device		*pdev;
@@ -205,32 +204,7 @@ struct hid_parent {
 	int				 pkt_sz;
 	int				 child_cnt;
 	pthread_t			 thread;
-	STAILQ_HEAD(, hid_child)	 hclist;
 	STAILQ_ENTRY(hid_parent)	 next;
-};
-
-struct hid_child {
-	struct hid_parent	*parent;
-	enum uhidd_ctype	 type;
-	int			 ndx;
-	unsigned char		 rdesc[_MAX_RDESC_SIZE];
-	int			 rsz;
-	int			 rid[_MAX_REPORT_IDS];
-	int			 nr;
-#if 0
-	hid_item_t		 env;
-#endif
-	struct hid_interface	*hi;
-#if 0
-	union {
-		struct mouse_dev md;
-		struct kbd_dev kd;
-		struct hid_dev hd;
-	} u;
-#endif
-	STAILQ_HEAD(, hid_report) hrlist;
-	STAILQ_HEAD(, hidaction) halist;
-	STAILQ_ENTRY(hid_child)	 next;
 };
 
 /*
@@ -293,11 +267,13 @@ extern const char *config_file;
 
 void		cc_driver_init(void);
 void		dump_report_desc(unsigned char *, int);
+#if 0
 void		find_device_hidaction(struct hid_child *);
 void		find_global_hidaction(struct hid_child *);
+#endif
 void		hexdump_report_desc(unsigned char *, int);
 void		hid_driver_init(void);
-struct hid_interface *hid_interface_alloc(unsigned char *, int);
+struct hid_interface *hid_interface_alloc(unsigned char *, int, void *);
 void		hid_interface_free(struct hid_interface *);
 void		hid_interface_input_data(struct hid_interface *, char *, int);
 void		*hid_interface_get_private(struct hid_interface *);
@@ -307,6 +283,7 @@ void		hid_appcol_set_private(struct hid_appcol *, void *);
 void		*hid_appcol_get_private(struct hid_appcol *);
 struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
     struct hid_report *);
+void		*hid_appcol_get_interface_private(struct hid_appcol *);
 int		hid_report_get_id(struct hid_report *);
 struct hid_field *hid_report_get_next_field(struct hid_report *,
     struct hid_field *, enum hid_kind);
@@ -318,25 +295,14 @@ void		hid_field_get_usage_value(struct hid_field *, int,
 int		hid_field_get_usage_min(struct hid_field *);
 int		hid_field_get_usage_max(struct hid_field *);
 void		hid_driver_register(struct hid_driver *);
-
-#if 0
-hid_data_t	hid_start_parse(hid_parser_t, int);
-void		hid_end_parse(hid_data_t);
-int		hid_get_item(hid_data_t, hid_item_t *, int);
-int		hid_report_size(hid_parser_t, enum hid_kind, int);
-int		hid_locate(hid_parser_t, unsigned int, enum hid_kind,
-		    hid_item_t *);
-int		hid_get_data(const void *, const hid_item_t *);
-int		hid_get_array8(const void *, uint8_t *, const hid_item_t *);
-void		hid_set_data(void *, const hid_item_t *, int);
-#endif
 int		kbd_attach(struct hid_appcol *);
 void		kbd_driver_init(void);
-void		kbd_cleanup(struct hid_child *);
 void		kbd_input(struct hid_appcol *, uint8_t, uint8_t *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
 void		kbd_set_tr(struct hid_appcol *, int (*)(int));
+#if 0
 void		match_hidaction(struct hid_child *, struct hidaction_config *);
+#endif
 void		mouse_driver_init(void);
 struct device_config *config_find_device(int, int, int);
 int		config_attach_mouse(struct hid_parent *);
@@ -345,7 +311,9 @@ int		config_attach_hid(struct hid_parent *);
 void		config_init(void);
 int		config_read_file(void);
 int		config_strip_report_id(struct hid_parent *);
+#if 0
 void		run_hidaction(struct hid_child *, struct hidaction *, char *,
 		    int);
+#endif
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);

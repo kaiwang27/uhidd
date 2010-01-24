@@ -553,16 +553,12 @@ kbd_match(struct hid_appcol *ha)
 int
 kbd_attach(struct hid_appcol *ha)
 {
-#if 0
-	struct hid_report *hr;
-	struct hid_field *hf;
-#endif
+	struct hid_parent *hp;
 	struct kbd_dev *kd;
 	struct stat sb;
-#if 0
-	unsigned int usage;
-	int modifier_found, key_found, flags;
-#endif
+
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 
 	if ((kd = calloc(1, sizeof(*kd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in kbd_attach: %m");
@@ -573,86 +569,21 @@ kbd_attach(struct hid_appcol *ha)
 
 	/* Open /dev/vkbdctl. */
 	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
-#if 0
-		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
-		    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
-		    type_name(hc->type));
+		syslog(LOG_ERR, "%s[iface:%d]=> could not open /dev/vkbdctl:"
+		    " %m", hp->dev, hp->ndx);
 		if (verbose && errno == ENOENT)
-			PRINT2("vkbd.ko kernel module not loaded?\n")
-#endif
+			PRINT1("vkbd.ko kernel module not loaded?\n")
 		return (-1);
 	}
 
 	if (verbose) {
 		if (fstat(kd->vkbd_fd, &sb) < 0) {
-#if 0
-			syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
-			    "/dev/vkbdctl: %m", hp->dev, hp->ndx, hc->ndx,
-			    type_name(hc->type));
-#endif
+			syslog(LOG_ERR, "%s[iface:%d]=> fstat: /dev/vkbdctl:"
+			    " %m", hp->dev, hp->ndx);
 			return (-1);
 		}
-#if 0
-		PRINT2("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
-#endif
+		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 	}
-
-#if 0
-	/* Find the location of modifiers. (224 is LeftControl)*/
-	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 224), hid_input,
-		&kd->mods)) {
-		if (verbose)
-			PRINT2("modifiers at %d\n", kd->mods.pos);
-		/* We want the 8bit long data start from LeftControl. */
-		kd->mods.report_size = 8;
-	} else
-		PRINT2("warning: no modifiers\n");
-
-	/* Find the location of keycode array. */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_KEYBOARD, 0), hid_input,
-		&kd->keys)) {
-		if (verbose)
-			PRINT2("keycode array (%d)\n", kd->keys.pos);
-	} else
-		PRINT2("warning: no keycode array\n");
-#endif
-
-#if 0
-	hr = hid_appcol_get_next_report(ha, NULL);
-	if (hr == NULL) {
-		syslog(LOG_ERR, "keyboard child device doesn't have any "
-		    "report, attach failed");
-		return (-1);
-	}
-	if (hid_report_get_id(hr) != 0)
-		syslog(LOG_WARNING, "keyboard child device has non-zero "
-		    "report id, probably not supported by this driver");
-
-	modifier_found = 0;
-	key_found = 0;
-	hf = NULL;
-	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
-		flags = hid_field_get_flags(hf);
-		if (flags & HIO_CONST)
-			continue;
-		usage = hid_field_get_usage_min(hf);
-		/* 224 is LeftControl. */
-		if (usage == HID_USAGE2(HUP_KEYBOARD, 224))
-			modifier_found = 1;
-		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
-			key_found = 1;
-			kd->key_cnt = hid_field_get_usage_count(hf);
-		}
-	}
-
-	if (!modifier_found)
-		syslog(LOG_WARNING, "keyboard doesn't have modifier keys");
-	if (!key_found) {
-		syslog(LOG_ERR, "keyboard doesn't have key array, "
-		    "attach failed");
-		return (-1);
-	}
-#endif
 
 	/* TODO: These should be tunable. */
 	kd->delay1 = KB_DELAY1;
@@ -669,12 +600,15 @@ kbd_attach(struct hid_appcol *ha)
 void
 kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
+	struct hid_parent *hp;
 	struct hid_field *hf;
 	unsigned int usage;
 	int cnt, flags, i;
 	uint8_t mod;
 	uint8_t keycodes[MAX_KEYCODE];	
 
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 	mod = 0;
 	cnt = 0;
 	hf = NULL;
@@ -687,14 +621,14 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 			for (i = 0; i < hf->hf_count; i++)
 				mod |= hf->hf_value[i] << i;
 			if (verbose)
-				printf("mod=%u\n", mod);
+				PRINT1("mod=0x%02x\n", mod);
 		}
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
 			cnt = hf->hf_count;
 			for (i = 0; i < cnt; i++)
 				keycodes[i] = HID_USAGE(hf->hf_usage[i]);
 			if (verbose) {
-				printf("key codes: ");
+				PRINT1("key codes: ");
 				for (i = 0; i < hf->hf_count; i++)
 					printf("0x%02x ", keycodes[i]);
 				putchar('\n');
@@ -732,40 +666,6 @@ kbd_set_tr(struct hid_appcol *ha, int (*tr)(int))
 
 	kd->kbd_tr = tr;
 }
-
-#if 0
-void
-kbd_recv(struct hid_child *hc, char *buf, int len)
-{
-	struct hid_parent *hp;
-	int cnt, i;
-
-	(void) len;
-
-	hp = hc->parent;
-	assert(hp != NULL);
-
-	KBD_LOCK;
-	kd->ndata.mod = (uint8_t) hid_get_data(buf, &kd->mods);
-	cnt = hid_get_array8(buf, kd->ndata.keycode, &kd->keys);
-	if (verbose) {
-		PRINT2("keycode received data: mod(0x%02x)", kd->ndata.mod);
-		for (i = 0; i < cnt; i++)
-			printf(" %d", kd->ndata.keycode[i]);
-		putchar('\n');
-	}
-	KBD_UNLOCK;
-}
-
-void
-kbd_cleanup(struct hid_child *hc)
-{
-
-	kd->ndata.mod = 0;
-	memset(kd->ndata.keycode, 0, sizeof(kd->ndata.keycode));
-	kbd_process_keys(hc);
-}
-#endif
 
 static void *
 kbd_task(void *arg)
