@@ -61,13 +61,6 @@ static int	find_and_attach(struct libusb20_backend *backend,
 static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
-static void	attach_hid_parent(struct hid_parent *hp);
-#if 0
-static int	attach_hid_child(struct hid_child *hc);
-static void	child_recv(struct hid_child *hc, char *buf, int len);
-static void	dispatch(struct hid_parent *hp, char *buf, int len);
-static void	repair_report_desc(struct hid_child *hc);
-#endif
 static void	*start_hid_parent(void *arg);
 static void	sighandler(int sig __unused);
 static void	terminate(int eval);
@@ -160,7 +153,7 @@ main(int argc, char **argv)
 	/* Write pid file. */
 	pidfile_write(pfh);
 
-	/* XXX Register drivers. */
+	/* Register drivers. */
 	kbd_driver_init();
 	mouse_driver_init();
 	cc_driver_init();
@@ -186,13 +179,11 @@ main(int argc, char **argv)
 		goto uhidd_end;
 
 	STAILQ_FOREACH(hp, &hplist, next) {
-/* 		if (!STAILQ_EMPTY(&hp->hclist)) */
 		if (hp->hi != NULL)
-		    pthread_create(&hp->thread, NULL, start_hid_parent,
-			(void *)hp);
+			pthread_create(&hp->thread, NULL, start_hid_parent,
+			    (void *)hp);
 	}
 	STAILQ_FOREACH(hp, &hplist, next) {
-/* 		if (!STAILQ_EMPTY(&hp->hclist)) */
 		if (hp->hi != NULL)
 			pthread_join(hp->thread, NULL);
 	}
@@ -223,7 +214,7 @@ sighandler(int sig __unused)
 static int
 find_and_attach(struct libusb20_backend *backend, const char *dev)
 {
-     struct libusb20_device *pdev;
+	struct libusb20_device *pdev;
 	unsigned int bus, addr;
 
 	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
@@ -398,369 +389,11 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		return;
 	}
 
-	STAILQ_INSERT_TAIL(&hplist, hp, next);
-
-	attach_hid_parent(hp);
-}
-
-#if 0
-static void
-repair_report_desc(struct hid_child *hc)
-{
-	struct hid_parent *hp;
-	struct hid_child *phc;
-	unsigned int bTag, bType, bSize;
-	unsigned char *b, *pos;
-	hid_item_t env;
-	int bytes, i;
-
-	hp = hc->parent;
-	assert(hp != NULL);
-
-	/* First child does not need repairing. */
-	phc = STAILQ_FIRST(&hp->hclist);
-	if (phc == hc)
-		return;
-
-	while (STAILQ_NEXT(phc, next) != hc)
-		phc = STAILQ_NEXT(phc, next);
-	env = phc->env;
-
-	/* First step: insert USAGE PAGE before USAGE if need. */
-	b = hc->rdesc;
-	while (b < hc->rdesc + hc->rsz) {
-		pos = b;
-		bSize = *b++;
-		if (bSize == 0xfe) {
-			/* long item */
-			bSize = *b++;
-			bTag = *b++;
-			b += bSize;
-			continue;
-		}
-
-		/* short item */
-		bTag = bSize >> 4;
-		bType = (bSize >> 2) & 3;
-		bSize &= 3;
-		if (bSize == 3)
-			bSize = 4;
-		b += bSize;
-
-		/* If we found a USAGE PAGE, no need to continue. */
-		if (bType == 1 && bTag == 0)
-			break;
-
-		/* Check if it is USAGE item. */
-		if (bType == 2 && bTag == 0) {
-
-			/*
-			 * We need to insert USAGE PAGE before this
-			 * USAGE. USAGE PAGE needs 3-byte space.
-			 */
-			if (env._usage_page < 256)
-				bytes = 2;
-			else
-				bytes = 3;
-			memmove(pos + bytes, pos, hc->rsz - (pos - hc->rdesc));
-			pos[0] = (1 << 2) | (bytes - 1);
-			pos[1] = env._usage_page & 0xff;
-			if (bytes == 3)
-				pos[2] = (env._usage_page & 0xff00) >> 8;
-			hc->rsz += bytes;
-			if (verbose > 1) {
-				printf("\tnr=%d repair: insert USAGE PAGE",
-				    hc->nr);
-				for (i = 0; i < bytes; i++)
-					printf(" 0x%02x", pos[i]);
-				putchar('\n');
-			}
-			break;
-		}
-
-	}
-
-	/*
-	 * Second step: insert missing REPORT COUNT before the first main
-	 * item.
-	 */
-	b = hc->rdesc;
-	while (b < hc->rdesc + hc->rsz) {
-		pos = b;
-		bSize = *b++;
-		if (bSize == 0xfe) {
-			/* long item */
-			bSize = *b++;
-			bTag = *b++;
-			b += bSize;
-			continue;
-		}
-
-		/* short item */
-		bTag = bSize >> 4;
-		bType = (bSize >> 2) & 3;
-		bSize &= 3;
-		if (bSize == 3)
-			bSize = 4;
-		b += bSize;
-
-		/* Check if we already got REPORT COUNT. */
-		if (bType == 1 && bTag == 9)
-			break;
-
-		/* Check if it is INPUT, OUTPUT or FEATURE. */
-		if (bType == 0 && (bTag == 8 || bTag == 9 || bTag == 11)) {
-			if (env.report_count < 256)
-				bytes = 2;
-			else if (env.report_count < 65536)
-				bytes = 3;
-			else
-				bytes = 5;
-			memmove(pos + bytes, pos, hc->rsz - (pos - hc->rdesc));
-			if (bytes < 5)
-				pos[0] = (9 << 4) | (1 << 2) | (bytes - 1);
-			else
-				pos[0] = (9 << 4) | (1 << 2) | 3;
-			pos[1] = env.report_count & 0xff;
-			if (bytes > 2)
-				pos[2] = (env.report_count & 0xff00) >> 8;
-			if (bytes > 3) {
-				pos[3] = (env.report_count & 0xff0000) >> 16;
-				pos[4] = env.report_count >> 24;
-			}
-			hc->rsz += bytes;
-			if (verbose > 1) {
-				printf("\tnr=%d repair: insert REPORT COUNT",
-				    hc->nr);
-				for (i = 0; i < bytes; i++)
-					printf(" 0x%02x", pos[i]);
-				putchar('\n');
-			}
-			break;
-		}
-	}
-}
-#endif
-
-static void
-attach_hid_parent(struct hid_parent *hp)
-{
-#if 0
-	struct hid_child *hc;
-	hid_data_t d;
-	hid_item_t h, ch;
-	int rid[_MAX_REPORT_IDS];
-	int i, nr, start, end, lend;
-#endif
-
-	/* Check how many children we have. */
 	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz);
+	hid_interface_set_private(hp->hi, hp);
 
-	return;
-
-#if 0
-	nr = hid_get_report_id_num(p);
-	hid_get_report_ids(p, rid, nr);
-	if (verbose) {
-		PRINT1("#id=%d ", nr);
-		printf("rid=(");
-		for (i = 0; i < nr; i++) {
-			printf("%d", rid[i]);
-			if (i < nr - 1)
-				putchar(',');
-		}
-		printf(")\n");
-	}
-	if (verbose > 1) {
-		if (nr == 0)
-			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
-			    0,
-			    hid_report_size(p, hid_input, 0),
-			    hid_report_size(p, hid_output, 0),
-			    hid_report_size(p, hid_feature, 0));
-		for (i = 0; i < nr; i++)
-			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
-			    rid[i],
-			    hid_report_size(p, hid_input, rid[i]),
-			    hid_report_size(p, hid_output, rid[i]),
-			    hid_report_size(p, hid_feature, rid[i]));
-	}
-	memset(&h, 0, sizeof(h));
-	memset(&ch, 0, sizeof(ch));
-	start = end = lend = 0;
-	for (d = hid_start_parse(p, 1<<hid_collection | 1<<hid_endcollection);
-	     hid_get_item(d, &h, -1); ) {
-		if (h.kind == hid_collection && h.collection == 0x01)
-			ch = h;
-		if (h.kind == hid_endcollection &&
-		    ch.collevel - 1 == h.collevel) {
-			end = d->p - d->start;
-			hc = calloc(1, sizeof(*hc));
-			if (hc == NULL) {
-				syslog(LOG_ERR, "calloc failed: %m");
-				exit(1);
-			}
-			STAILQ_INSERT_TAIL(&hp->hclist, hc, next);
-			hc->parent = hp;
-			hc->ndx = hp->child_cnt;
-			hc->env = h;
-			start = lend;
-			lend = end;
-			hc->rsz = end - start;
-			if (hc->rsz <= 0 || hc->rsz > _MAX_RDESC_SIZE)
-				syslog(LOG_ERR, "%s[iface:%d]=> invalid hid "
-				    "child report desc range [%d-%d]", hp->dev,
-				    hp->ndx, start, end);
-			memcpy(hc->rdesc, &hp->rdesc[start], hp->rsz);
-			PRINT1("[%d-%d] ", start, end);
-			if (ch.usage == HID_USAGE2(HUP_GENERIC_DESKTOP,
-			    HUG_MOUSE)) {
-				if (config_attach_mouse(hp)) {
-					printf("*MOUSE FOUND*\n");
-					hc->type = UHIDD_MOUSE;
-				} else {
-					printf("*MOUSE IGNORED*\n");
-					STAILQ_REMOVE(&hp->hclist, hc,
-					    hid_child, next);
-					free(hc);
-					continue;
-				}
-			} else if (ch.usage ==
-			    HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD)) {
-				if (config_attach_kbd(hp)) {
-					printf("*KEYBOARD FOUND*\n");
-					hc->type = UHIDD_KEYBOARD;
-				} else {
-					printf("*KEYBOARD IGNORED*\n");
-					STAILQ_REMOVE(&hp->hclist, hc,
-					    hid_child, next);
-					free(hc);
-					continue;
-				}
-			} else {
-				if (config_attach_hid(hp)) {
-					printf("*GENERAL HID DEVICE FOUND*\n");
-					hc->type = UHIDD_HID;
-				} else {
-					printf("*GENERAL HID DEVICE "
-					    "IGNORED*\n");
-					STAILQ_REMOVE(&hp->hclist, hc,
-					    hid_child, next);
-					free(hc);
-					continue;
-				}
-			}
-
-#if 0
-			/*
-			 * Here we need to "repair" some child report desc
-			 * before we can give it to the parser, since there
-			 * are possible global items(i.e. environment) missing.
-			 */
-			repair_report_desc(hc);
-#endif
-
-			/*
-			 * Attach child.
-			 */
-			if (attach_hid_child(hc) < 0) {
-				if (verbose)
-					PRINT2("ATTACH FAILED!\n");
-				STAILQ_REMOVE(&hp->hclist, hc, hid_child, next);
-				free(hc);
-			} else 
-				hp->child_cnt++;				
-		}
-	}
-	hid_end_parse(d);
-	hid_parser_free(p);
-#endif
+	STAILQ_INSERT_TAIL(&hplist, hp, next);
 }
-
-#if 0
-static int
-attach_hid_child(struct hid_child *hc)
-{
-	hid_parser_t p;
-	int i, r;
-
-	r = 0;
-
-	/*
-	 * Allocate a separate hid parser for the child.
-	 */
-
-	p = hid_parser_alloc(hc->rdesc, hc->rsz);
-	hc->p = p;
-	hc->nr = p->nr;
-	memcpy(hc->rid, p->rid, p->nr * sizeof(int));
-
-	/*
-	 * Dump the report IDs for debugging.
-	 */
-
-	if (verbose > 2) {
-		printf("\t#id=%d ", hc->nr);
-		printf("rid=(");
-		for (i = 0; i < hc->nr; i++) {
-			printf("%d", hc->rid[i]);
-			if (i < hc->nr - 1)
-				putchar(',');
-		}
-		printf(")\n");
-		if (hc->nr == 0)
-			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
-			    0,
-			    hid_report_size(p, hid_input, 0),
-			    hid_report_size(p, hid_output, 0),
-			    hid_report_size(p, hid_feature, 0));
-		for (i = 0; i < hc->nr; i++)
-			printf("\tid(%2d): input(%d) output(%d) feature(%d)\n",
-			    hc->rid[i],
-			    hid_report_size(p, hid_input, hc->rid[i]),
-			    hid_report_size(p, hid_output, hc->rid[i]),
-			    hid_report_size(p, hid_feature, hc->rid[i]));
-		if (verbose > 2) {
-			dump_report_desc(hc->rdesc, hc->rsz);
-			hexdump_report_desc(hc->rdesc, hc->rsz);
-		}
-	}
-
-	/*
-	 * Device type specific attachment.
-	 */
-
-	switch (hc->type) {
-	case UHIDD_MOUSE:
-		r = mouse_attach(hc);
-		break;
-	case UHIDD_KEYBOARD:
-		r = kbd_attach(hc);
-		break;
-	case UHIDD_HID:
-		r = hid_attach(hc);
-		break;
-	default:
-		/* Internal Error! */
-		assert(0);
-	}
-
-	if (r < 0)
-		return (r);
-
-	/*
-	 * Found applicable hidactions for this child.
-	 */
-
-	STAILQ_INIT(&hc->halist);
-	if (!STAILQ_EMPTY(&uconfig.gconfig.halist))
-		find_global_hidaction(hc);
-	if (!STAILQ_EMPTY(&uconfig.dclist))
-		find_device_hidaction(hc);
-
-	return (0);
-}
-#endif
 
 static void *
 start_hid_parent(void *arg)
@@ -856,7 +489,6 @@ start_hid_parent(void *arg)
 				putchar('\n');
 			}
 			hid_interface_input_data(hp->hi, buf, actlen);
-/* 			dispatch(hp, buf, actlen); */
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
 			if (verbose)
@@ -876,81 +508,6 @@ parent_end:
 
 	return (NULL);
 }
-
-#if 0
-static void
-dispatch(struct hid_parent *hp, char *buf, int len)
-{
-	struct hid_child *hc;
-	int i;
-
-	if (STAILQ_EMPTY(&hp->hclist)) {
-		PRINT1("no hid child device exist, packet discarded.");
-		return;
-	}
-
-	STAILQ_FOREACH(hc, &hp->hclist, next) {
-		if (hc->nr == 0) {
-			/*
-			 * If the child has no report IDs at all, just dispatch
-			 * this packet to it.
-			 */
-			child_recv(hc, buf, len);
-			return;
-		}
-		for (i = 0; i < hc->nr; i++) {
-			if (hc->rid[i] == buf[0]) {
-				child_recv(hc, buf, len);
-				return;
-			}
-		}
-	}
-
-	/*
-	 * If there are no matching child device, discard the packet.
-	 */
-	if (hc == NULL) {
-		if (verbose)
-			PRINT1("packet doesn't belong to any hid child, "
-			    "packet discarded.\n");
-	}
-}
-
-static void
-child_recv(struct hid_child *hc, char *buf, int len)
-{
-	struct hidaction *ha;
-
-	/*
-	 * Before send the data to the specific device recv routine, check
-	 * if we need to execute any hidaction.
-	 */
-
-	if (!STAILQ_EMPTY(&hc->halist)) {
-		STAILQ_FOREACH(ha, &hc->halist, next)
-			run_hidaction(hc, ha, buf, len);
-	}
-
-	/*
-	 * Call specific device recv routine.
-	 */
-
-	switch (hc->type) {
-	case UHIDD_MOUSE:
-		mouse_recv(hc, buf, len);
-		break;
-	case UHIDD_KEYBOARD:
-		kbd_recv(hc, buf, len);
-		break;
-	case UHIDD_HID:
-		hid_recv(hc, buf, len);
-		break;
-	default:
-		/* Internal Error! */
-		assert(0);
-	}
-}
-#endif
 
 static void
 usage(void)

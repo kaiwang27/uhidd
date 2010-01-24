@@ -118,6 +118,7 @@ struct hid_interface {
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
+	void			*hi_data;
 	STAILQ_HEAD(, hid_appcol) halist;
 };
 
@@ -299,6 +300,8 @@ void		hid_driver_init(void);
 struct hid_interface *hid_interface_alloc(unsigned char *, int);
 void		hid_interface_free(struct hid_interface *);
 void		hid_interface_input_data(struct hid_interface *, char *, int);
+void		*hid_interface_get_private(struct hid_interface *);
+void		hid_interface_set_private(struct hid_interface *, void *);
 unsigned int	hid_appcol_get_usage(struct hid_appcol *);
 void		hid_appcol_set_private(struct hid_appcol *, void *);
 void		*hid_appcol_get_private(struct hid_appcol *);
