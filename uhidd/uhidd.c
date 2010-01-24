@@ -359,7 +359,6 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	hp->ndx = ndx;
 	memcpy(hp->rdesc, rdesc, actlen);
 	hp->rsz = actlen;
-	STAILQ_INIT(&hp->hclist);
 	ddesc = libusb20_dev_get_device_desc(pdev);
 	hp->vendor_id = ddesc->idVendor;
 	hp->product_id = ddesc->idProduct;
@@ -389,8 +388,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		return;
 	}
 
-	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz);
-	hid_interface_set_private(hp->hi, hp);
+	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz, hp);
 
 	STAILQ_INSERT_TAIL(&hplist, hp, next);
 }

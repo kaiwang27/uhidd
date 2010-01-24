@@ -49,7 +49,7 @@ static void	hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
 static STAILQ_HEAD(, hid_driver) hdlist = STAILQ_HEAD_INITIALIZER(hdlist);
 
 struct hid_interface *
-hid_interface_alloc(unsigned char *rdesc, int rsz)
+hid_interface_alloc(unsigned char *rdesc, int rsz, void *data)
 {
 	struct hid_interface *hi;
 
@@ -58,6 +58,7 @@ hid_interface_alloc(unsigned char *rdesc, int rsz)
 		err(1, "calloc");
 	memcpy(hi->rdesc, rdesc, rsz);
 	hi->rsz = rsz;
+	hi->hi_data = data;
 	STAILQ_INIT(&hi->halist);
 	hid_parser_init(hi);
 
@@ -150,6 +151,7 @@ hid_add_appcol(struct hid_interface *hi, unsigned int usage)
 	if ((ha = calloc(1, sizeof(*ha))) == NULL)
 		return (NULL);
 
+	ha->ha_hi = hi;
 	ha->ha_usage = usage;
 	STAILQ_INIT(&ha->ha_hrlist);
 	STAILQ_INSERT_TAIL(&hi->halist, ha, ha_next);
@@ -600,6 +602,14 @@ hid_appcol_set_private(struct hid_appcol *ha, void *data)
 
 	assert(ha != NULL);
 	ha->ha_data = data;
+}
+
+void *
+hid_appcol_get_interface_private(struct hid_appcol *ha)
+{
+
+	assert(ha != NULL && ha->ha_hi != NULL);
+	return (ha->ha_hi->hi_data);
 }
 
 void *
