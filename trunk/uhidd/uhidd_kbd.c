@@ -793,6 +793,7 @@ kbd_driver_init(void)
 	hd.hd_match = kbd_match;
 	hd.hd_attach = kbd_attach;
 	hd.hd_recv = kbd_recv;
+	hd.hd_recv_raw = NULL;
 
 	hid_driver_register(&hd);
 }

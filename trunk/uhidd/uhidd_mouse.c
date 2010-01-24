@@ -292,6 +292,7 @@ mouse_driver_init(void)
 	hd.hd_match = mouse_match;
 	hd.hd_attach = mouse_attach;
 	hd.hd_recv = mouse_recv;
+	hd.hd_recv_raw = NULL;
 
 	hid_driver_register(&hd);
 }

@@ -618,7 +618,6 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 		return;
 
 	assert(hr->hr_id == 0 || hr->hr_id == *data);
-	assert(ha->ha_hd->hd_recv != NULL);
 
 	/* Skip report id. */
 	if (hr->hr_id != 0)
@@ -632,6 +631,12 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 			printf("0x%02x ", data[i]);
 		printf("\n");
 	}
+
+	if (ha->ha_hd->hd_recv_raw != NULL)
+		ha->ha_hd->hd_recv_raw(ha, data, len);
+
+	if (ha->ha_hd->hd_recv == NULL)
+		return;
 
 	/*
 	 * "Extract" data to each hid_field of this hid_report.
@@ -682,8 +687,10 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 		}
 	}
 
-	if (ha->ha_hd->hd_recv != NULL)
-		ha->ha_hd->hd_recv(ha, hr);
+	/*
+	 * Pass data to driver recv method.
+	 */
+	ha->ha_hd->hd_recv(ha, hr);
 }
 
 int

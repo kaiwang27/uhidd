@@ -44,6 +44,15 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
+/*
+ * General HID device.
+ */
+
+struct hid_dev {
+	int hidctl_fd;
+	char *name;
+};
+
 int
 hid_attach(struct hid_child *hc)
 {
