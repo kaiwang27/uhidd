@@ -107,6 +107,8 @@ struct hid_appcol {
 	unsigned int ha_usage;
 	void *ha_data;
 	struct hid_driver *ha_hd;
+	unsigned char ha_rdesc[_MAX_RDESC_SIZE];
+	int ha_rsz;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
 	STAILQ_ENTRY(hid_appcol) ha_next;
 };
