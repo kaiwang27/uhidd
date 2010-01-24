@@ -164,6 +164,7 @@ main(int argc, char **argv)
 	kbd_driver_init();
 	mouse_driver_init();
 	cc_driver_init();
+	hid_driver_init();
 
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {

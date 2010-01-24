@@ -633,10 +633,6 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 
 	assert(hr->hr_id == 0 || hr->hr_id == *data);
 
-	/* Skip report id. */
-	if (hr->hr_id != 0)
-		data++;
-
 	if (verbose > 1)
 		printf("received data len(%d)\n", len);
 	if (verbose > 2) {
@@ -651,6 +647,10 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 
 	if (ha->ha_hd->hd_recv == NULL)
 		return;
+
+	/* Skip report id. */
+	if (hr->hr_id != 0)
+		data++;
 
 	/*
 	 * "Extract" data to each hid_field of this hid_report.

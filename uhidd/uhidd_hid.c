@@ -53,57 +53,80 @@ struct hid_dev {
 	char *name;
 };
 
-int
-hid_attach(struct hid_child *hc)
+static int
+hid_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+
+	(void) ha;
+
+	return (HID_MATCH_GHID);
+}
+
+static int
+hid_attach(struct hid_appcol *ha)
+{
+	struct hid_report *hr;
+	struct hid_dev *hd;
 	struct stat sb;
 	struct usb_gen_descriptor ugd;
 	int rid;
 
-	hp = hc->parent;
-	assert(hp != NULL);
+	if ((hd = calloc(1, sizeof(*hd))) == NULL) {
+		syslog(LOG_ERR, "calloc failed in hid_attach: %m");
+		return (-1);
+	}
+
+	hid_appcol_set_private(ha, hd);
 
 	/*
 	 * Open a new virtual hid device.
 	 */
-
-	if ((hc->u.hd.hidctl_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
+	if ((hd->hidctl_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> could not open "
 		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
 		if (verbose && errno == ENOENT)
 			PRINT2("uvhid.ko kernel moduel not loaded?\n")
+#endif
 		return (-1);
 	}
 
-	if (fstat(hc->u.hd.hidctl_fd, &sb) < 0) {
+	if (fstat(hd->hidctl_fd, &sb) < 0) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> fstat: "
 		    "/dev/uvhidctl: %m", hp->dev, hp->ndx, hc->ndx,
 		    type_name(hc->type));
+#endif
 		return (-1);
 	}
 
-	if ((hc->u.hd.name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
+	if ((hd->name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> strdup failed: %m",
 		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));
+#endif
 		return (-1);
 	}
-		
+
+#if 0		
 	if (verbose)
 		PRINT2("hid device name: %s\n", devname(sb.st_rdev, S_IFCHR));
+#endif
 
 	/*
 	 * Set the report descriptor of this virtual hid device.
 	 */
 
-	ugd.ugd_data = hc->rdesc;
-	ugd.ugd_actlen = hc->rsz;
+	ugd.ugd_data = ha->ha_rdesc;
+	ugd.ugd_actlen = ha->ha_rsz;
 
-	if (ioctl(hc->u.hd.hidctl_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
+	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> "
 		    "ioctl(USB_SET_REPORT_DESC): %m", hp->dev, hp->ndx,
 		    hc->ndx, type_name(hc->type));
+#endif
 		return (-1);
 	}
 
@@ -113,43 +136,67 @@ hid_attach(struct hid_child *hc)
 	 * USB_GET_REPORT_ID is not able to handle multiple report IDs.
 	 */
 
-	if (hc->nr == 0)
+	if (STAILQ_EMPTY(&ha->ha_hrlist))
 		rid = 0;
-	else
-		rid = hc->rid[0];
+	else {
+		hr = STAILQ_FIRST(&ha->ha_hrlist);
+		rid = hr->hr_id;
+	}
 
-	if (ioctl(hc->u.hd.hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
+	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
+#if 0
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> "
 		    "ioctl(USB_SET_REPORT_ID): %m", hp->dev, hp->ndx,
 		    hc->ndx, type_name(hc->type));
+#endif
 		return (-1);
 	}
 
 	return (0);
 }
 
-void
-hid_recv(struct hid_child *hc, char *buf, int len)
+static void
+hid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 {
-	struct hid_parent *hp;
+	struct hid_dev *hd;
 	int i;
 
-	hp = hc->parent;
-	assert(hp != NULL);
+	hd = hid_appcol_get_private(ha);
+	assert(hd != NULL);
 
 	if (verbose) {
+#if 0
 		PRINT2("%s received data:", hc->u.hd.name);
+#endif
 		for (i = 0; i < len; i++)
-			printf(" %u", (unsigned char) buf[i]);
+			printf(" %u", buf[i]);
 		putchar('\n');
 	}
 
+#if 0
 	if (config_strip_report_id(hp)) {
 		buf++;
 		len--;
 	}
+#endif
 
-	if (write(hc->u.hd.hidctl_fd, buf, len) < 0)
+	write(hd->hidctl_fd, buf, len);
+#if 0
+	if (write(hd->hidctl_fd, buf, len) < 0)
 		syslog(LOG_ERR, "%s[iface:%d][c%d:%s]=> write failed: %m",
 		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));
+#endif
+}
+
+void
+hid_driver_init(void)
+{
+	struct hid_driver hd;
+
+	hd.hd_match = hid_match;
+	hd.hd_attach = hid_attach;
+	hd.hd_recv = NULL;
+	hd.hd_recv_raw = hid_recv_raw;
+
+	hid_driver_register(&hd);
 }

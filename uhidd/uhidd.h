@@ -122,6 +122,7 @@ struct hid_interface {
 };
 
 #define	HID_MATCH_NONE		0
+#define	HID_MATCH_GHID		5
 #define	HID_MATCH_GENERAL	10
 #define	HID_MATCH_DEVICE	20
 
@@ -294,8 +295,7 @@ void		dump_report_desc(unsigned char *, int);
 void		find_device_hidaction(struct hid_child *);
 void		find_global_hidaction(struct hid_child *);
 void		hexdump_report_desc(unsigned char *, int);
-int		hid_attach(struct hid_child *);
-void		hid_recv(struct hid_child *, char *, int);
+void		hid_driver_init(void);
 struct hid_interface *hid_interface_alloc(unsigned char *, int);
 void		hid_interface_free(struct hid_interface *);
 void		hid_interface_input_data(struct hid_interface *, char *, int);
