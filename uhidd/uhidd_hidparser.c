@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010 Kai Wang
  * All rights reserved.
  * Copyright (c) 1999, 2001 Lennart Augustsson <augustss@netbsd.org>
  * All rights reserved.
@@ -153,6 +153,16 @@ hid_add_appcol(struct hid_interface *hi, unsigned int usage)
 	return (ha);
 }
 
+static void
+hid_end_appcol(struct hid_appcol *ha, unsigned char *ha_start,
+    unsigned char *ha_end)
+{
+
+	assert(ha != NULL && ha_start != NULL && ha_end != NULL);
+	ha->ha_rsz = ha_end - ha_start;
+	memcpy(ha->ha_rdesc, ha_start, ha->ha_rsz);
+}
+
 static struct hid_report *
 hid_find_report(struct hid_appcol *ha, int report_id)
 {
@@ -231,7 +241,7 @@ hid_parser_init(struct hid_interface *hi)
 	struct hid_appcol *ha;
 	struct hid_report *hr;
 	struct hid_driver *hd, *mhd;
-	unsigned char *b, *data;
+	unsigned char *b, *data, *ha_start;
 	unsigned int bTag, bType, bSize;
 	int dval, nusage, collevel, minset, i, match, old_match;
 	unsigned int usages[MAXUSAGE];
@@ -255,10 +265,10 @@ hid_parser_init(struct hid_interface *hi)
 	minset = 0;
 	nusage = 0;
 	collevel = 0;
+	ha_start = hi->rdesc;
 
 	b = hi->rdesc;
 	while (b < hi->rdesc + hi->rsz) {
-
 		bSize = *b++;
 
 		/* Skip long item */
@@ -336,6 +346,10 @@ hid_parser_init(struct hid_interface *hi)
 				collevel--;
 				/*hid_clear_local(c);*/
 				nusage = 0;
+				if (collevel == 0 && ha != NULL) {
+					hid_end_appcol(ha, ha_start, b);
+					ha_start = b;
+				}
 				break;
 			default:
 				warnx("hid_parser: unknown Main item(%u)",
@@ -541,8 +555,8 @@ hid_parser_dump(struct hid_interface *hi)
 	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
 		up = HID_PAGE(ha->ha_usage);
 		u = HID_USAGE(ha->ha_usage);
-		printf("HID APPLICATION COLLECTION (%s)\n",
-		    usage_in_page(up, u));
+		printf("HID APPLICATION COLLECTION (%s) size(%d)\n",
+		    usage_in_page(up, u), ha->ha_rsz);
 		STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
 			printf("  HID REPORT: ID %d\n", hr->hr_id);
 			for (i = 0; i < 3; i++) {
