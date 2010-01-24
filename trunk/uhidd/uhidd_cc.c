@@ -205,7 +205,6 @@ cc_attach(struct hid_appcol *ha)
 	return (0);
 }
 
-/* XXX */
 #define MAX_KEYCODE 256
 
 static void

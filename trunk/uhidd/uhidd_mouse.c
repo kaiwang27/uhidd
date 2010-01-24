@@ -51,14 +51,6 @@ __FBSDID("$FreeBSD $");
 
 struct mouse_dev {
 	int cons_fd;
-#if 0
-	hid_item_t x;
-	hid_item_t y;
-	hid_item_t wheel;
-	hid_item_t btn[BUTTON_MAX];
-	int btn_cnt;
-	int flags;
-#endif
 };
 
 static int
@@ -76,73 +68,11 @@ mouse_match(struct hid_appcol *ha)
 static int
 mouse_attach(struct hid_appcol *ha)
 {
+	struct hid_parent *hp;
 	struct mouse_dev *md;
 
-#if 0
-	hc->u.md.cons_fd = open("/dev/consolectl", O_RDWR);
-	if (hc->u.md.cons_fd < 0) {
-		PRINT2("could not open /dev/consolectl: %s", strerror(errno));
-		return (-1);
-	}
-
-	/* Find X Axis. */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_X), hid_input,
-	    &hc->u.md.x)) {
-		if (verbose)
-			PRINT2("has X AXIS(%d)\n", hc->u.md.x.pos);
-	}
-
-	/* Find Y Axis. */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Y), hid_input,
-	    &hc->u.md.y)) {
-		if (verbose)
-			PRINT2("has Y AXIS(%d)\n", hc->u.md.y.pos);
-	}
-
-	/* HUG_WHEEL is the most common place for mouse wheel. */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_WHEEL),
-	    hid_input, &hc->u.md.wheel)) {
-		if (verbose)
-			PRINT2("wheel found (HUG_WHEEL(%d))\n",
-			    hc->u.md.wheel.pos);
-		goto next;
-	}
-
-	/*
-	 * Some older Microsoft mouse (e.g. Microsoft Wireless Intellimouse 2.0)
-	 * used HUG_TWHEEL(0x48) to report its wheel. Note that HUG_TWHEEL seems
-	 * to be a temporary thing at the time. (The name TWHEEL is also a
-	 * non-standard name) Later new HID usage spec defined 0x48 as usage
-	 * "Resolution Multiplier" and newer M$ mouse stopped using 0x48 for
-	 * mouse wheel.
-	 */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_TWHEEL),
-	    hid_input, &hc->u.md.wheel)) {
-		if (verbose)
-			PRINT2("wheel found (HUG_TWHEEL(%d))\n",
-			    hc->u.md.wheel.pos);
-		goto next;
-	}
-
-	/* Try if the mouse is using HUG_Z to report its wheel. */
-	if (hid_locate(hc->p, HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Z),
-		hid_input, &hc->u.md.wheel)) {
-		if (verbose)
-			PRINT2("wheel found (HUG_Z(%d))\n", hc->u.md.wheel.pos);
-	}
-
-	/* Otherwise we have no wheel. */
-
-next:
-	for (i = 0; i < BUTTON_MAX; i++) {
-		if (!hid_locate(hc->p, HID_USAGE2(HUP_BUTTON, (i + 1)),
-		    hid_input, &hc->u.md.btn[i]))
-			break;
-	}
-	hc->u.md.btn_cnt = i;
-	if (verbose)
-		PRINT2("%d buttons\n", hc->u.md.btn_cnt);
-#endif
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 
 	if ((md = calloc(1, sizeof(*md))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in mouse_attach: %m");
@@ -153,60 +83,18 @@ next:
 
 	md->cons_fd = open("/dev/consolectl", O_RDWR);
 	if (md->cons_fd < 0) {
-		syslog(LOG_ERR, "could not open /dev/consolectl: %m");
+		syslog(LOG_ERR, "%s[iface:%d]=> could not open "
+		    "/dev/consolectl: %m", hp->dev, hp->ndx);
 		return (-1);
 	}
 
 	return (0);
 }
 
-#if 0
-void
-mouse_recv(struct hid_child *hc, char *buf, int len)
-{
-	struct hid_parent *hp;
-	struct mouse_info mi;
-	int b, btn, dx, dy, dw, i;
-
-	(void) len;
-
-	hp = hc->parent;
-	assert(hp != NULL);
-
-	dx = hid_get_data(buf, &hc->u.md.x);
-	dy = hid_get_data(buf, &hc->u.md.y);
-	dw = -hid_get_data(buf, &hc->u.md.wheel);
-	btn = 0;
-	for (i = 0; i < hc->u.md.btn_cnt; i++) {
-		if (i == 1)
-			b = 2;
-		else if (i == 2)
-			b = 1;
-		else
-			b = i;
-		if (hid_get_data(buf, &hc->u.md.btn[i]))
-			btn |= (1 << b);
-	}
-
-	if (verbose)
-		PRINT2("mouse received data: dx(%d) dy(%d) dw(%d) btn(%#x)\n",
-		    dx, dy, dw, btn);
-
-	mi.operation = MOUSE_ACTION;
-	mi.u.data.x = dx;
-	mi.u.data.y = dy;
-	mi.u.data.z = dw;
-	mi.u.data.buttons = btn;
-
-	if (ioctl(hc->u.md.cons_fd, CONS_MOUSECTL, &mi) < 0)
-		PRINT2("could not submit mouse data: ioctl failed: %s\n",
-		    strerror(errno));
-}
-#endif
-
 static void
 mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
+	struct hid_parent *hp;
 	struct hid_field *hf;
 	struct mouse_dev *md;
 	struct mouse_info mi;
@@ -214,6 +102,8 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 	int has_wheel, has_twheel, has_z, flags;
 	int b, btn, dx, dy, dw, dt, dz, i;
 
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 	md = hid_appcol_get_private(ha);
 	assert(md != NULL);
 
@@ -248,14 +138,30 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 				dy = hf->hf_value[i];
 				break;
 			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_WHEEL):
+				/*
+				 * HUG_WHEEL is the most common place for
+				 * mouse wheel.
+				 */
 				has_wheel = 1;
 				dw = -hf->hf_value[i];
 				break;
 			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_TWHEEL):
+				/*
+				 * Some older Microsoft mouse (e.g. Microsoft
+				 * Wireless Intellimouse 2.0) used
+				 * HUG_TWHEEL(0x48) to report its wheel. Note
+				 * that HUG_TWHEEL seems to be a temporary thing
+				 * at the time. (The name TWHEEL is also a
+				 * non-standard name) Later new HID usage spec
+				 * defined 0x48 as usage "Resolution Multiplier"
+				 * and newer M$ mouse stopped using 0x48 for
+				 * mouse wheel.
+				 */
 				has_twheel = 1;
 				dt = -hf->hf_value[i];
 				break;
 			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Z):
+				/* Some mouse use HUG_Z to report its wheel. */
 				has_z = 1;
 				dz = -hf->hf_value[i];
 				break;
@@ -263,6 +169,11 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
+	if (verbose)
+		PRINT1("mouse received data: dx(%d) dy(%d) dw(%d) btn(%#x)\n",
+		    dx, dy, dw, btn);
+
+	/* Push the data to console device. (and sysmouse) */
 	mi.operation = MOUSE_ACTION;
 	mi.u.data.x = dx;
 	mi.u.data.y = dy;
@@ -277,11 +188,8 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 		mi.u.data.z = 0;
 
 	if (ioctl(md->cons_fd, CONS_MOUSECTL, &mi) < 0)
-		syslog(LOG_ERR, "could not submit mouse data: ioctl failed:"
-		    " %m");
-
-	if (verbose > 1)
-		printf("btn=%#x dx=%d dy=%d dw=%d\n", btn, dx, dy, dw);
+		syslog(LOG_ERR, "%s[iface:%d]=> could not submit mouse data:"
+		    " ioctl failed: %m", hp->dev, hp->ndx);
 }
 
 void
