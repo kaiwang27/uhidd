@@ -56,7 +56,14 @@ struct mouse_dev {
 static int
 mouse_match(struct hid_appcol *ha)
 {
+	struct hid_parent *hp;
 	unsigned int u;
+
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
+
+	if (!config_attach_mouse(hp))
+		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
 	if (u == HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_MOUSE))

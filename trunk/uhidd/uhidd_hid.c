@@ -56,8 +56,13 @@ struct hid_dev {
 static int
 hid_match(struct hid_appcol *ha)
 {
+	struct hid_parent *hp;
 
-	(void) ha;
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
+
+	if (!config_attach_hid(hp))
+		return (HID_MATCH_NONE);
 
 	return (HID_MATCH_GHID);
 }
