@@ -167,12 +167,10 @@ hid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 		putchar('\n');
 	}
 
-#if 0
 	if (config_strip_report_id(hp)) {
 		buf++;
 		len--;
 	}
-#endif
 
 	if (write(hd->hidctl_fd, buf, len) < 0)
 		syslog(LOG_ERR, "%s[iface:%d]=> write failed: %m", hp->dev,
