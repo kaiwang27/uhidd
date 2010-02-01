@@ -80,7 +80,7 @@ main(int argc, char **argv)
 
 	config_init();
 
-	while ((opt = getopt(argc, argv, "cdhkKmMsuv")) != -1) {
+	while ((opt = getopt(argc, argv, "cdhkKmMosuv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -96,6 +96,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			clconfig.attach_mouse = 1;
+			break;
+		case 'o':
+			clconfig.attach_cc = 1;
 			break;
 		case 's':
 			clconfig.strip_report_id = 1;

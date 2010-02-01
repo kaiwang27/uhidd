@@ -235,6 +235,7 @@ config_init(void)
 	clconfig.attach_mouse = -1;
 	clconfig.attach_kbd = -1;
 	clconfig.attach_hid = -1;
+	clconfig.attach_cc = -1;
 	clconfig.strip_report_id = -1;
 }
 
@@ -313,6 +314,20 @@ config_attach_hid(struct hid_parent *hp)
 		return (clconfig.attach_hid);
 
 	return (uconfig.gconfig.attach_hid);
+}
+
+int
+config_attach_cc(struct hid_parent *hp)
+{
+	struct device_config *dc;
+
+	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	if (dc != NULL)
+		return (dc->attach_cc);
+	if (clconfig.attach_hid != -1)
+		return (clconfig.attach_cc);
+
+	return (uconfig.gconfig.attach_cc);
 }
 
 int
