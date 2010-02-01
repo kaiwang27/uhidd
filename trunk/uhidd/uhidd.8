@@ -33,7 +33,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl c Ar file
-.Op Fl dhkKmMsuv
+.Op Fl dhkKmMosuv
 .Ar /dev/ugen%u.%u
 .Sh DESCRIPTION
 The
@@ -97,6 +97,8 @@ Attach Mouse HID child device.
 .It Fl M
 Attach Mouse as a Generic HID child device. This option impiles
 .Fl m .
+.It Fl o
+Attach Consumer Control child device.
 .It Fl s
 Strip the report ID byte from the hid report data for the Generic
 HID child device. This is needed if the hid application is using
