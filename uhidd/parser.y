@@ -324,7 +324,7 @@ config_attach_cc(struct hid_parent *hp)
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
 	if (dc != NULL)
 		return (dc->attach_cc);
-	if (clconfig.attach_hid != -1)
+	if (clconfig.attach_cc != -1)
 		return (clconfig.attach_cc);
 
 	return (uconfig.gconfig.attach_cc);
