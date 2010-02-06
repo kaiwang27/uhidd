@@ -107,6 +107,14 @@ hid_interface_get_private(struct hid_interface *hi)
 	return (hi->hi_data);
 }
 
+void
+hid_interface_set_write_callback(struct hid_interface *hi,
+    int (*write_callback)(void *, char *, int)) {
+
+	assert(hi != NULL);
+	hi->hi_write_callback = write_callback;
+}
+
 static struct hid_state *
 hid_new_state(void)
 {

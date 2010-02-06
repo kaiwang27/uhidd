@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,7 @@ static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
 static void	*start_hid_parent(void *arg);
+static int	hid_write_callback(void *context, char *buf, int len);
 static void	sighandler(int sig __unused);
 static void	terminate(int eval);
 
@@ -392,6 +393,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	}
 
 	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz, hp);
+	hid_interface_set_write_callback(hp->hi, hid_write_callback);
 
 	STAILQ_INSERT_TAIL(&hplist, hp, next);
 }
@@ -442,7 +444,7 @@ start_hid_parent(void *arg)
 	hp->pdev = pdev;
 
 	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
-	x |= 1;
+	x |= 1;			/* IN transfer. */
 	xfer = libusb20_tr_get_pointer(hp->pdev, x);
 	if (xfer == NULL) {
 		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_get_pointer failed\n",
@@ -485,7 +487,7 @@ start_hid_parent(void *arg)
 			actlen = libusb20_tr_get_actual_length(xfer);
 			if (verbose > 2) {
 				PRINT1("received data(%u): ", actlen);
-				for (i = 0; (uint32_t)i < actlen; i++)
+				for (i = 0; (uint32_t) i < actlen; i++)
 					printf("%02d ", buf[i]);
 				putchar('\n');
 			}
@@ -510,10 +512,88 @@ parent_end:
 	return (NULL);
 }
 
+static int
+hid_write_callback(void *context, char *buf, int len)
+{
+	struct hid_parent *hp;
+	struct libusb20_transfer *xfer;
+	uint32_t actlen;
+	uint8_t x;
+	int e, i, size;
+
+	hp = context;
+	assert(hp != NULL && hp->pdev != NULL);
+
+	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
+	xfer = libusb20_tr_get_pointer(hp->pdev, x);
+	if (xfer == NULL) {
+		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_get_pointer failed\n",
+		    hp->dev, hp->ndx);
+		return (-1);
+	}
+
+	e = libusb20_tr_open(xfer, 4096, 1, hp->ep);
+	if (e && e != LIBUSB20_ERROR_BUSY) {
+		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_open failed\n",
+		    hp->dev, hp->ndx);
+		return (-1);
+	}
+	
+	if (libusb20_tr_pending(xfer)) {
+		PRINT1("tr pending\n");
+		return (-1);
+	}
+
+	size = len;
+	while (size > 0) {
+
+		libusb20_tr_setup_intr(xfer, buf, len, 0);
+
+		libusb20_tr_start(xfer);
+
+		for (;;) {
+			if (libusb20_dev_process(hp->pdev) != 0) {
+				PRINT1(" device detached?\n");
+				return (-1);
+			}
+			if (libusb20_tr_pending(xfer) == 0)
+				break;
+			libusb20_dev_wait_process(hp->pdev, -1);
+		}
+
+		switch (libusb20_tr_get_status(xfer)) {
+		case 0:
+			actlen = libusb20_tr_get_actual_length(xfer);
+			if (verbose > 2) {
+				PRINT1("transfered data(%u): ", actlen);
+				for (i = 0; (uint32_t) i < actlen; i++)
+					printf("%02d ", buf[i]);
+				putchar('\n');
+			}
+			break;
+
+		case LIBUSB20_TRANSFER_TIMED_OUT:
+			if (verbose)
+				PRINT1("TIMED OUT\n");
+			return (-1);
+		default:
+			if (verbose)
+				PRINT1("transfer error\n");
+			return (-1);
+		}
+
+		buf += actlen;
+		size -= actlen;
+	}
+
+	return (0);
+}
+
+
 static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: uhidd [-cdhkmuv] /dev/ugen%%u.%%u\n");
+	fprintf(stderr, "usage: uhidd [-cdhkmouv] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
