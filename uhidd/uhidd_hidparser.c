@@ -43,8 +43,6 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 static void	hid_clear_local(struct hid_state *c);
 static void	hid_parser_init(struct hid_interface * p);
 static void	hid_parser_dump(struct hid_interface * p);
-static void	hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
-    uint8_t *, int);
 
 static STAILQ_HEAD(, hid_driver) hdlist = STAILQ_HEAD_INITIALIZER(hdlist);
 
@@ -655,7 +653,7 @@ hid_appcol_get_next_report(struct hid_appcol *ha, struct hid_report *hr)
 	return (nhr);
 }
 
-static void
+void
 hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data,
     int len)
 {
