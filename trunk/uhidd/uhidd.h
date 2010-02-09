@@ -289,6 +289,8 @@ void		*hid_appcol_get_private(struct hid_appcol *);
 struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
 		    struct hid_report *);
 void		*hid_appcol_get_interface_private(struct hid_appcol *);
+void		hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
+		    uint8_t *, int);
 void		hid_appcol_xfer_data(struct hid_appcol *, struct hid_report *);
 int		hid_report_get_id(struct hid_report *);
 struct hid_field *hid_report_get_next_field(struct hid_report *,
