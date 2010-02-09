@@ -278,6 +278,7 @@ void		hid_driver_init(void);
 struct hid_interface *hid_interface_alloc(unsigned char *, int, void *);
 void		hid_interface_free(struct hid_interface *);
 void		hid_interface_input_data(struct hid_interface *, char *, int);
+void		hid_interface_output_data(struct hid_interface *, char *, int);
 void		*hid_interface_get_private(struct hid_interface *);
 void		hid_interface_set_private(struct hid_interface *, void *);
 void		hid_interface_set_write_callback(struct hid_interface *,
@@ -288,6 +289,7 @@ void		*hid_appcol_get_private(struct hid_appcol *);
 struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
 		    struct hid_report *);
 void		*hid_appcol_get_interface_private(struct hid_appcol *);
+void		hid_appcol_xfer_data(struct hid_appcol *, struct hid_report *);
 int		hid_report_get_id(struct hid_report *);
 struct hid_field *hid_report_get_next_field(struct hid_report *,
     struct hid_field *, enum hid_kind);
@@ -298,6 +300,7 @@ void		hid_field_get_usage_value(struct hid_field *, int,
 		    unsigned int *, int *);
 int		hid_field_get_usage_min(struct hid_field *);
 int		hid_field_get_usage_max(struct hid_field *);
+void		hid_field_set_value(struct hid_field *, int, int);
 void		hid_driver_register(struct hid_driver *);
 int		kbd_attach(struct hid_appcol *);
 void		kbd_driver_init(void);

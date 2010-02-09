@@ -69,8 +69,10 @@ __FBSDID("$FreeBSD $");
 
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/kbio.h>
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
+#include <dev/vkbd/vkbd_var.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -82,6 +84,10 @@ __FBSDID("$FreeBSD $");
 #include <unistd.h>
 
 #include "uhidd.h"
+
+#define	HUG_NUM_LOCK		0x0001
+#define	HUG_CAPS_LOCK		0x0002
+#define	HUG_SCROLL_LOCK		0x0003
 
 /*
  * Keyboard device.
@@ -111,6 +117,7 @@ struct kbd_dev {
 	struct kbd_data ndata;
 	struct kbd_data odata;
 	pthread_t kbd_task;
+	pthread_t kbd_status_task;
 	pthread_mutex_t kbd_mtx;
 	uint32_t now;
 	int delay1;
@@ -401,6 +408,7 @@ static struct kbd_mods kbd_mods[KBD_NMOD] = {
 };
 
 static void	*kbd_task(void *arg);
+static void	*kbd_status_task(void *arg);
 static void	kbd_write(struct kbd_dev *kd, int hid_key, int make);
 static void	kbd_process_keys(struct kbd_dev *kd);
 
@@ -563,6 +571,7 @@ kbd_attach(struct hid_appcol *ha)
 	struct hid_parent *hp;
 	struct kbd_dev *kd;
 	struct stat sb;
+	unsigned int u;
 
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
@@ -600,6 +609,14 @@ kbd_attach(struct hid_appcol *ha)
 
 	pthread_mutex_init(&kd->kbd_mtx, NULL);
 	pthread_create(&kd->kbd_task, NULL, kbd_task, kd);
+
+	/*
+	 * Only start keyborad status task if it's a real keyboard.
+	 * (e.g. should not start task for comsumer control device)
+	 */
+	u = hid_appcol_get_usage(ha);
+	if (u == HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD))
+		pthread_create(&kd->kbd_status_task, NULL, kbd_status_task, ha);
 
 	return (0);
 }
@@ -687,6 +704,90 @@ kbd_task(void *arg)
 		kbd_process_keys(kd);
 		KBD_UNLOCK;
 		usleep(25 * 1000);	/* wake up every 25ms. */
+	}
+
+	return (NULL);
+}
+
+static void *
+kbd_status_task(void *arg)
+{
+	struct hid_parent *hp;
+	struct hid_appcol *ha;
+	struct hid_report *hr;
+	struct hid_field *hf;
+	struct kbd_dev *kd;
+	vkbd_status_t vs;
+	unsigned int usage;
+	int flags, found, len, i;
+
+	ha = arg;
+	assert(ha != NULL);
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
+	kd = hid_appcol_get_private(ha);
+	assert(kd != NULL);
+
+	for (;;) {
+		len = read(kd->vkbd_fd, &vs, sizeof(vs));
+		if (len < 0) {
+			if (errno != EINTR)
+				break;
+			continue;
+		}
+		if (verbose)
+			PRINT1("status changed: leds=0x%x\n", vs.leds);
+		hr = NULL;
+		while ((hr = hid_appcol_get_next_report(ha, hr)) != NULL) {
+			found = 0;
+			hf = NULL;
+			while ((hf = hid_report_get_next_field(hr, hf,
+			    HID_OUTPUT)) != NULL) {
+				flags = hid_field_get_flags(hf);
+				if (flags & HIO_CONST)
+					continue;
+				usage = hid_field_get_usage_page(hf);
+				if (usage != HUP_LEDS)
+					continue;
+				found = 1;
+				for (i = 0; i < hf->hf_count; i++) {
+					hid_field_get_usage_value(hf, i, &usage,
+					    NULL);
+					switch (HID_USAGE(usage)) {
+					case HUG_NUM_LOCK:
+						if (vs.leds & LED_NUM)
+							hid_field_set_value(hf,
+							    i, 1);
+						else
+							hid_field_set_value(hf,
+							    i, 0);
+						break;
+					case HUG_CAPS_LOCK:
+						if (vs.leds & LED_CAP)
+							hid_field_set_value(hf,
+							    i, 1);
+						else
+							hid_field_set_value(hf,
+							    i, 0);
+						break;
+					case HUG_SCROLL_LOCK:
+						if (vs.leds & LED_SCR)
+							hid_field_set_value(hf,
+							    i, 1);
+						else
+							hid_field_set_value(hf,
+							    i, 0);
+						break;
+					default:
+						hid_field_set_value(hf, i, 0);
+						break;
+					}
+
+				}
+			}
+			if (found)
+				hid_appcol_xfer_data(ha, hr);
+		}
 	}
 
 	return (NULL);
