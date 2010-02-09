@@ -92,6 +92,16 @@ hid_interface_input_data(struct hid_interface *hi, char *data, int len)
 }
 
 void
+hid_interface_output_data(struct hid_interface *hi, char *data, int len)
+{
+
+	if (hi->hi_write_callback == NULL)
+		return;
+
+	hi->hi_write_callback(hi->hi_data, data, len);
+}
+
+void
 hid_interface_set_private(struct hid_interface *hi, void *data)
 {
 
@@ -240,8 +250,11 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 		err(1, "hid_parser: calloc");
 
 	hf->hf_usage_page = hs->usage_page;
-	for (i = 0; i < nusage; i++)
+	for (i = 0; i < nusage; i++) {
 		hf->hf_nusage[i] = usages[i];
+		if (hf->hf_flags & HIO_VARIABLE)
+			hf->hf_usage[i] = hf->hf_nusage[i];
+	}
 	hf->hf_usage_min = hs->usage_minimum;
 	hf->hf_usage_max = hs->usage_maximum;
 
@@ -550,8 +563,8 @@ hid_parser_dump(struct hid_interface *hi)
 		else if (hf->hf_flags & HIO_VARIABLE) {			\
 			printf("[VARIABLE]\n");				\
 			for (j = 0; j < hf->hf_count; j++) {		\
-				up = HID_PAGE(hf->hf_usage[j]);		\
-				u = HID_USAGE(hf->hf_usage[j]);		\
+				up = HID_PAGE(hf->hf_nusage[j]);	\
+				u = HID_USAGE(hf->hf_nusage[j]);	\
 				printf("        USAGE %s\n",		\
 				    usage_in_page(up, u));		\
 			}						\
@@ -729,6 +742,53 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 	ha->ha_hd->hd_recv(ha, hr);
 }
 
+void
+hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
+{
+	struct hid_field *hf;
+	char buf[4096], *p;
+	int data, i, j, end, off, mask, pos, size, total;
+
+	(void) ha;
+
+	p = buf;
+	total = 0;
+
+	/* Prepend report id if this report has id other than 0. */
+	if (hr->hr_id != 0) {
+		total++;
+		*p++ = hr->hr_id;
+	}
+
+	STAILQ_FOREACH(hf, &hr->hr_hflist[HID_OUTPUT], hf_next) {
+		for (i = 0; i < hf->hf_count; i++) {
+			if (hf->hf_flags & HIO_CONST)
+				data = 0;
+			else
+				data = hf->hf_value[i];
+			pos = hf->hf_pos + i * hf->hf_size;
+			size = hf->hf_size;
+			if (size != 32) {
+				mask = (1 << size) - 1;
+				data &= mask;
+			} else
+				mask = ~0;
+			data <<= (pos % 8);
+			mask <<= (pos % 8);
+			mask = ~mask;
+			off = pos / 8;
+			end = (pos + size) / 8 - off;
+			for (j = 0; j <= end; j++)
+				p[off + j] = (p[off + j] & (mask >> (j*8))) |
+				    ((data >> (j*8)) & 0xff);
+		}
+		total += hf->hf_count * hf->hf_size;
+	}
+	total = (total + 7) / 8;
+
+	hid_interface_output_data(ha->ha_hi, buf, total);
+}
+
 int
 hid_report_get_id(struct hid_report *hr)
 {
@@ -810,6 +870,15 @@ hid_field_get_usage_value(struct hid_field *hf, int i, unsigned int *usage,
 		*usage = hf->hf_usage[i];
 	if (value != NULL)
 		*value = hf->hf_value[i];
+}
+
+void
+hid_field_set_value(struct hid_field *hf, int i, int value)
+{
+
+	assert(hf != NULL);
+	assert(i >= 0 && i < hf->hf_count);
+	hf->hf_value[i] = value;
 }
 
 void
