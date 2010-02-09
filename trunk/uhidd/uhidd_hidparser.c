@@ -90,13 +90,14 @@ hid_interface_input_data(struct hid_interface *hi, char *data, int len)
 }
 
 void
-hid_interface_output_data(struct hid_interface *hi, char *data, int len)
+hid_interface_output_data(struct hid_interface *hi, int report_id, char *data,
+    int len)
 {
 
 	if (hi->hi_write_callback == NULL)
 		return;
 
-	hi->hi_write_callback(hi->hi_data, data, len);
+	hi->hi_write_callback(hi->hi_data, report_id, data, len);
 }
 
 void
@@ -117,7 +118,7 @@ hid_interface_get_private(struct hid_interface *hi)
 
 void
 hid_interface_set_write_callback(struct hid_interface *hi,
-    int (*write_callback)(void *, char *, int)) {
+    int (*write_callback)(void *, int, char *, int)) {
 
 	assert(hi != NULL);
 	hi->hi_write_callback = write_callback;
@@ -744,19 +745,10 @@ void
 hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
-	char buf[4096], *p;
+	char buf[4096];
 	int data, i, j, end, off, mask, pos, size, total;
 
-	(void) ha;
-
-	p = buf;
 	total = 0;
-
-	/* Prepend report id if this report has id other than 0. */
-	if (hr->hr_id != 0) {
-		total++;
-		*p++ = hr->hr_id;
-	}
 
 	STAILQ_FOREACH(hf, &hr->hr_hflist[HID_OUTPUT], hf_next) {
 		for (i = 0; i < hf->hf_count; i++) {
@@ -777,14 +769,14 @@ hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 			off = pos / 8;
 			end = (pos + size) / 8 - off;
 			for (j = 0; j <= end; j++)
-				p[off + j] = (p[off + j] & (mask >> (j*8))) |
-				    ((data >> (j*8)) & 0xff);
+				buf[off + j] = (buf[off + j] & (mask >> (j*8)))
+				    | ((data >> (j*8)) & 0xff);
 		}
 		total += hf->hf_count * hf->hf_size;
 	}
 	total = (total + 7) / 8;
 
-	hid_interface_output_data(ha->ha_hi, buf, total);
+	hid_interface_output_data(ha->ha_hi, hr->hr_id, buf, total);
 }
 
 int

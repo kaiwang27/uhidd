@@ -62,7 +62,8 @@ static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
 static void	*start_hid_parent(void *arg);
-static int	hid_write_callback(void *context, char *buf, int len);
+static int	hid_set_report(void *context, int report_id, char *buf,
+		    int len);
 static void	sighandler(int sig __unused);
 static void	terminate(int eval);
 
@@ -393,7 +394,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	}
 
 	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz, hp);
-	hid_interface_set_write_callback(hp->hi, hid_write_callback);
+	hid_interface_set_write_callback(hp->hi, hid_set_report);
 
 	STAILQ_INSERT_TAIL(&hplist, hp, next);
 }
@@ -512,8 +513,9 @@ parent_end:
 	return (NULL);
 }
 
-static int
-hid_write_callback(void *context, char *buf, int len)
+#if 0
+int
+hid_interrupt_out(void *context, int report_id, char *buf, int len)
 {
 	struct hid_parent *hp;
 	struct libusb20_transfer *xfer;
@@ -532,7 +534,7 @@ hid_write_callback(void *context, char *buf, int len)
 		return (-1);
 	}
 
-	e = libusb20_tr_open(xfer, 4096, 1, hp->ep);
+	e = libusb20_tr_open(xfer, 4096, 1, XXX); /* FIXME */
 	if (e && e != LIBUSB20_ERROR_BUSY) {
 		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_open failed\n",
 		    hp->dev, hp->ndx);
@@ -584,6 +586,35 @@ hid_write_callback(void *context, char *buf, int len)
 
 		buf += actlen;
 		size -= actlen;
+	}
+
+	return (0);
+}
+#endif
+
+static int
+hid_set_report(void *context, int report_id, char *buf, int len)
+{
+	struct LIBUSB20_CONTROL_SETUP_DECODED req;
+	struct hid_parent *hp;
+	uint16_t actlen;
+	int e;
+
+	hp = context;
+	assert(hp != NULL && hp->pdev != NULL);
+
+	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
+	req.bmRequestType = LIBUSB20_ENDPOINT_OUT |
+	    LIBUSB20_REQUEST_TYPE_CLASS | LIBUSB20_RECIPIENT_INTERFACE;
+	req.bRequest = 0x09;	/* SET_REPORT */
+	req.wValue = (0x02 << 8) | (report_id & 0xff);
+	req.wIndex = hp->ndx;
+	req.wLength = len;
+	e = libusb20_dev_request_sync(hp->pdev, &req, buf, &actlen, len, 0);
+	if (e) {
+		syslog(LOG_ERR, "%s[iface:%d]=> libusb20_dev_request_sync"
+		    " failed", hp->dev, hp->ndx);
+		return (-1);
 	}
 
 	return (0);
