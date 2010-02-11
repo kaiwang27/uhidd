@@ -135,9 +135,6 @@ conf_entry
 	| attachhid
 	| detachkerneldriver
 	| stripreportid
-	| hidaction_conf {
-		STAILQ_INSERT_TAIL(&dconfig.halist, $1, next);
-	}
 	;
 
 attachmouse
@@ -183,29 +180,6 @@ stripreportid
 	| T_STRIPREPORTID T_NO {
 		dconfig.strip_report_id = 0;
 	}
-
-hidaction_conf
-	: T_STRING T_NUM T_NUM T_STRING {
-		$$ = calloc(1, sizeof(struct hidaction_config));
-		if ($$ == NULL)
-			err(1, "calloc");
-		$$->usage = $1;
-		$$->anyvalue = 0;
-		$$->value = $2;
-		$$->debounce = $3;
-		$$->action = $4;
-	}
-	| T_STRING '*' T_NUM T_STRING {
-		$$ = calloc(1, sizeof(struct hidaction_config));
-		if ($$ == NULL)
-			err(1, "calloc");
-		$$->usage = $1;
-		$$->anyvalue = 1;
-		$$->value = 0;
-		$$->debounce = $3;
-		$$->action = $4;
-	}
-	;
 
 %%
 

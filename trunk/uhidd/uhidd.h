@@ -141,17 +141,6 @@ struct hid_driver {
  * Configuration.
  */
 
-struct hidaction_config {
-	char *usage;
-	int value;
-	int anyvalue;
-	int debounce;
-	int lastseen;
-	int lastused;
-	char *action;
-	STAILQ_ENTRY(hidaction_config) next;
-};
-
 struct device_config {
 	int vendor_id;
 	int product_id;
@@ -171,16 +160,6 @@ struct uhidd_config {
 	STAILQ_HEAD(, hidaction_config) halist;
 	STAILQ_HEAD(, device_config) dclist;
 };
-
-#if 0
-struct hidaction {
-	struct hidaction_config *conf;
-	hid_item_t item;
-	int lastseen;
-	int lastused;
-	STAILQ_ENTRY(hidaction) next;
-};
-#endif
 
 /*
  * HID parent and child data structures.
@@ -322,9 +301,5 @@ int		config_attach_cc(struct hid_parent *);
 void		config_init(void);
 int		config_read_file(void);
 int		config_strip_report_id(struct hid_parent *);
-#if 0
-void		run_hidaction(struct hid_child *, struct hidaction *, char *,
-		    int);
-#endif
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
