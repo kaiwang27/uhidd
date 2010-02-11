@@ -644,20 +644,19 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 224)) {
 			for (i = 0; i < hf->hf_count; i++)
 				mod |= hf->hf_value[i] << i;
-			if (verbose)
-				PRINT1("mod=0x%02x\n", mod);
 		}
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
 			cnt = hf->hf_count;
 			for (i = 0; i < cnt; i++)
 				keycodes[i] = HID_USAGE(hf->hf_usage[i]);
-			if (verbose) {
-				PRINT1("key codes: ");
-				for (i = 0; i < hf->hf_count; i++)
-					printf("0x%02x ", keycodes[i]);
-				putchar('\n');
-			}
 		}
+	}
+
+	if (verbose) {
+		PRINT1("mod(0x%02x) key codes: ", mod);
+		for (i = 0; i < cnt; i++)
+			printf("0x%02x ", keycodes[i]);
+		putchar('\n');
 	}
 
 	kbd_input(ha, mod, keycodes, cnt);
