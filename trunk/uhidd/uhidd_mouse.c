@@ -53,7 +53,7 @@ struct mouse_dev {
 	int cons_fd;
 };
 
-static int
+int
 mouse_match(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
@@ -72,7 +72,7 @@ mouse_match(struct hid_appcol *ha)
 	return (HID_MATCH_NONE);
 }
 
-static int
+int
 mouse_attach(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
@@ -98,7 +98,7 @@ mouse_attach(struct hid_appcol *ha)
 	return (0);
 }
 
-static void
+void
 mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_parent *hp;
@@ -197,17 +197,4 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 	if (ioctl(md->cons_fd, CONS_MOUSECTL, &mi) < 0)
 		syslog(LOG_ERR, "%s[iface:%d]=> could not submit mouse data:"
 		    " ioctl failed: %m", hp->dev, hp->ndx);
-}
-
-void
-mouse_driver_init(void)
-{
-	struct hid_driver hd;
-
-	hd.hd_match = mouse_match;
-	hd.hd_attach = mouse_attach;
-	hd.hd_recv = mouse_recv;
-	hd.hd_recv_raw = NULL;
-
-	hid_driver_register(&hd);
 }

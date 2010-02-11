@@ -158,12 +158,6 @@ main(int argc, char **argv)
 	/* Write pid file. */
 	pidfile_write(pfh);
 
-	/* Register drivers. */
-	kbd_driver_init();
-	mouse_driver_init();
-	cc_driver_init();
-	hid_driver_init();
-
 	backend = libusb20_be_alloc_default();
 	if (backend == NULL) {
 		syslog(LOG_ERR, "can not alloc backend");
@@ -619,7 +613,6 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 
 	return (0);
 }
-
 
 static void
 usage(void)

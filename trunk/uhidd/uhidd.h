@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -106,7 +106,7 @@ struct hid_report {
 struct hid_appcol {
 	unsigned int ha_usage;
 	void *ha_data;
-	struct hid_driver *ha_hd;
+	struct hid_appcol_driver *ha_drv;
 	struct hid_interface *ha_hi;
 	unsigned char ha_rdesc[_MAX_RDESC_SIZE];
 	int ha_rsz;
@@ -129,13 +129,19 @@ struct hid_interface {
 #define	HID_MATCH_GENERAL	10
 #define	HID_MATCH_DEVICE	20
 
-struct hid_driver {
-	int (*hd_match)(struct hid_appcol *);
-	int (*hd_attach)(struct hid_appcol *);
-	void (*hd_recv)(struct hid_appcol *, struct hid_report *);
-	void (*hd_recv_raw)(struct hid_appcol *, uint8_t *, int);
-	STAILQ_ENTRY(hid_driver) hd_next;
+struct hid_appcol_driver {
+	int (*ha_drv_match)(struct hid_appcol *);
+	int (*ha_drv_attach)(struct hid_appcol *);
+	void (*ha_drv_recv)(struct hid_appcol *, struct hid_report *);
+	void (*ha_drv_recv_raw)(struct hid_appcol *, uint8_t *, int);
 };
+
+extern int hid_appcol_driver_num;
+extern struct hid_appcol_driver *hid_appcol_driver_list;
+extern struct hid_appcol_driver *kbd_driver;
+extern struct hid_appcol_driver *mouse_driver;
+extern struct hid_appcol_driver *ghid_driver;
+extern struct hid_appcol_driver *cc_driver;
 
 /*
  * Configuration.
@@ -246,14 +252,11 @@ extern const char *config_file;
  * Prototypes.
  */
 
-void		cc_driver_init(void);
+int		cc_match(struct hid_appcol *);
+int		cc_attach(struct hid_appcol *);
+void		cc_recv(struct hid_appcol *, struct hid_report *);
 void		dump_report_desc(unsigned char *, int);
-#if 0
-void		find_device_hidaction(struct hid_child *);
-void		find_global_hidaction(struct hid_child *);
-#endif
 void		hexdump_report_desc(unsigned char *, int);
-void		hid_driver_init(void);
 struct hid_interface *hid_interface_alloc(unsigned char *, int, void *);
 void		hid_interface_free(struct hid_interface *);
 void		hid_interface_input_data(struct hid_interface *, char *, int);
@@ -283,16 +286,14 @@ void		hid_field_get_usage_value(struct hid_field *, int,
 int		hid_field_get_usage_min(struct hid_field *);
 int		hid_field_get_usage_max(struct hid_field *);
 void		hid_field_set_value(struct hid_field *, int, int);
-void		hid_driver_register(struct hid_driver *);
+int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
-void		kbd_driver_init(void);
 void		kbd_input(struct hid_appcol *, uint8_t, uint8_t *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
 void		kbd_set_tr(struct hid_appcol *, int (*)(int));
-#if 0
-void		match_hidaction(struct hid_child *, struct hidaction_config *);
-#endif
-void		mouse_driver_init(void);
+int		mouse_match(struct hid_appcol *);
+int		mouse_attach(struct hid_appcol *);
+void		mouse_recv(struct hid_appcol *, struct hid_report *);
 struct device_config *config_find_device(int, int, int);
 int		config_attach_mouse(struct hid_parent *);
 int		config_attach_kbd(struct hid_parent *);
@@ -303,3 +304,6 @@ int		config_read_file(void);
 int		config_strip_report_id(struct hid_parent *);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
+int		vhid_match(struct hid_appcol *);
+int		vhid_attach(struct hid_appcol *);
+void		vhid_recv_raw(struct hid_appcol *, uint8_t *, int);
