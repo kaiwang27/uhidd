@@ -45,16 +45,16 @@ __FBSDID("$FreeBSD $");
 #include "uhidd.h"
 
 /*
- * General HID device.
+ * General Virtual HID device.
  */
 
-struct hid_dev {
+struct vhid_dev {
 	int hidctl_fd;
 	char *name;
 };
 
-static int
-hid_match(struct hid_appcol *ha)
+int
+vhid_match(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
 
@@ -69,12 +69,12 @@ hid_match(struct hid_appcol *ha)
 	return (HID_MATCH_GHID);
 }
 
-static int
-hid_attach(struct hid_appcol *ha)
+int
+vhid_attach(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
 	struct hid_report *hr;
-	struct hid_dev *hd;
+	struct vhid_dev *hd;
 	struct stat sb;
 	struct usb_gen_descriptor ugd;
 	int rid;
@@ -83,7 +83,7 @@ hid_attach(struct hid_appcol *ha)
 	assert(hp != NULL);
 
 	if ((hd = calloc(1, sizeof(*hd))) == NULL) {
-		syslog(LOG_ERR, "calloc failed in hid_attach: %m");
+		syslog(LOG_ERR, "calloc failed in vhid_attach: %m");
 		return (-1);
 	}
 
@@ -150,11 +150,11 @@ hid_attach(struct hid_appcol *ha)
 	return (0);
 }
 
-static void
-hid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
+void
+vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 {
 	struct hid_parent *hp;
-	struct hid_dev *hd;
+	struct vhid_dev *hd;
 	int i;
 
 	hp = hid_appcol_get_interface_private(ha);
@@ -177,17 +177,4 @@ hid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 	if (write(hd->hidctl_fd, buf, len) < 0)
 		syslog(LOG_ERR, "%s[iface:%d]=> write failed: %m", hp->dev,
 		    hp->ndx);
-}
-
-void
-hid_driver_init(void)
-{
-	struct hid_driver hd;
-
-	hd.hd_match = hid_match;
-	hd.hd_attach = hid_attach;
-	hd.hd_recv = NULL;
-	hd.hd_recv_raw = hid_recv_raw;
-
-	hid_driver_register(&hd);
 }

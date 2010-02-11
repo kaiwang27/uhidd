@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010 Kai Wang
  * All rights reserved.
  * Copyright (c) 2006 Maksim Yevmenkin <m_evmenkin@yahoo.com>
  * All rights reserved.
@@ -546,7 +546,7 @@ kbd_process_keys(struct kbd_dev *kd)
 	kd->odata = kd->ndata;
 }
 
-static int
+int
 kbd_match(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
@@ -791,17 +791,4 @@ kbd_status_task(void *arg)
 	}
 
 	return (NULL);
-}
-
-void
-kbd_driver_init(void)
-{
-	struct hid_driver hd;
-
-	hd.hd_match = kbd_match;
-	hd.hd_attach = kbd_attach;
-	hd.hd_recv = kbd_recv;
-	hd.hd_recv_raw = NULL;
-
-	hid_driver_register(&hd);
 }

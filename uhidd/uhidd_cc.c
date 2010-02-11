@@ -183,7 +183,7 @@ cc_tr(int hid_key)
 	}
 }
 
-static int
+int
 cc_match(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
@@ -202,7 +202,7 @@ cc_match(struct hid_appcol *ha)
 	return (HID_MATCH_NONE);
 }
 
-static int
+int
 cc_attach(struct hid_appcol *ha)
 {
 
@@ -215,7 +215,7 @@ cc_attach(struct hid_appcol *ha)
 
 #define MAX_KEYCODE 256
 
-static void
+void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
@@ -259,17 +259,4 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		putchar('\n');
 		kbd_input(ha, 0, keycodes, total);
 	}
-}
-
-void
-cc_driver_init(void)
-{
-	struct hid_driver hd;
-
-	hd.hd_match = cc_match;
-	hd.hd_attach = cc_attach;
-	hd.hd_recv = cc_recv;
-	hd.hd_recv_raw = NULL;
-
-	hid_driver_register(&hd);
 }

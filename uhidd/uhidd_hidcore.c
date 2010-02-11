@@ -266,7 +266,7 @@ hid_parser_init(struct hid_interface *hi)
 	struct hid_state *hs;
 	struct hid_appcol *ha;
 	struct hid_report *hr;
-	struct hid_driver *hd, *mhd;
+	struct hid_appcol_driver *hd, *mhd;
 	unsigned char *b, *data, *ha_start;
 	unsigned int bTag, bType, bSize;
 	int dval, nusage, collevel, minset, i, match, old_match;
@@ -506,8 +506,9 @@ hid_parser_init(struct hid_interface *hi)
 	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
 		mhd = NULL;
 		old_match = 0;
-		STAILQ_FOREACH(hd, &hdlist, hd_next) {
-			match = hd->hd_match(ha);
+		for (i = 0; i < hid_appcol_driver_num; i++) {
+			hd = &hid_appcol_driver_list[i];
+			match = hd->ha_drv_match(ha);
 			if (match != HID_MATCH_NONE) {
 				if (mhd == NULL || match > old_match) {
 					mhd = hd;
@@ -518,8 +519,8 @@ hid_parser_init(struct hid_interface *hi)
 		if (mhd != NULL) {
 			if (verbose)
 				printf("find matching driver\n");
-			mhd->hd_attach(ha);
-			ha->ha_hd = mhd;
+			mhd->ha_drv_attach(ha);
+			ha->ha_drv = mhd;
 		} else {
 			if (verbose)
 				printf("no matching driver\n");
@@ -662,7 +663,7 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 	int start, range, value, m, i, j, ndx;
 
 	/* Discard data if no driver attached. */
-	if (ha->ha_hd == NULL)
+	if (ha->ha_drv == NULL)
 		return;
 
 	assert(hr->hr_id == 0 || hr->hr_id == *data);
@@ -676,10 +677,10 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 		printf("\n");
 	}
 
-	if (ha->ha_hd->hd_recv_raw != NULL)
-		ha->ha_hd->hd_recv_raw(ha, data, len);
+	if (ha->ha_drv->ha_drv_recv_raw != NULL)
+		ha->ha_drv->ha_drv_recv_raw(ha, data, len);
 
-	if (ha->ha_hd->hd_recv == NULL)
+	if (ha->ha_drv->ha_drv_recv == NULL)
 		return;
 
 	/* Skip report id. */
@@ -738,7 +739,7 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 	/*
 	 * Pass data to driver recv method.
 	 */
-	ha->ha_hd->hd_recv(ha, hr);
+	ha->ha_drv->ha_drv_recv(ha, hr);
 }
 
 void
@@ -869,18 +870,6 @@ hid_field_set_value(struct hid_field *hf, int i, int value)
 	assert(hf != NULL);
 	assert(i >= 0 && i < hf->hf_count);
 	hf->hf_value[i] = value;
-}
-
-void
-hid_driver_register(struct hid_driver *hd)
-{
-	struct hid_driver *nhd;
-
-	nhd = malloc(sizeof(*nhd));
-	assert(nhd != NULL);
-	*nhd = *hd;
-
-	STAILQ_INSERT_TAIL(&hdlist, nhd, hd_next);
 }
 
 #if 0
