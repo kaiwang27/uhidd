@@ -607,7 +607,7 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	req.bmRequestType = LIBUSB20_ENDPOINT_OUT |
 	    LIBUSB20_REQUEST_TYPE_CLASS | LIBUSB20_RECIPIENT_INTERFACE;
 	req.bRequest = 0x09;	/* SET_REPORT */
-	req.wValue = (0x02 << 8) | (report_id & 0xff);
+	req.wValue = (0x02 << 8) | (report_id & 0xff); /* FIXME report type */
 	req.wIndex = hp->ndx;
 	req.wLength = len;
 	e = libusb20_dev_request_sync(hp->pdev, &req, buf, &actlen, len, 0);
