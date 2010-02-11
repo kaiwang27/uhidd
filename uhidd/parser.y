@@ -60,12 +60,10 @@ static struct device_config dconfig, *dconfig_p;
 %token <val> T_NUM
 %token <str> T_USAGE
 %token <str> T_STRING
-%type <hac> hidaction_conf
 
 %union {
 	char *str;
 	int val;
-	struct hidaction_config *hac;
 }
 
 %%
