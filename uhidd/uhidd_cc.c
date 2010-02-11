@@ -218,10 +218,14 @@ cc_attach(struct hid_appcol *ha)
 void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
+	struct hid_parent *hp;
 	struct hid_field *hf;
 	unsigned int usage, up;
 	int i, value, cnt, flags, total;
 	uint8_t keycodes[MAX_KEYCODE];
+
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 
 	total = 0;
 	cnt = 0;
@@ -249,13 +253,12 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
-	if (total > 0) {
-		printf("total = %d\n", total);
+	if (total > 0 && verbose) {
+		PRINT1("hid coeds: ");
 		if (cnt == 0)
-			printf("0\n");
-		else
-			for (i = 0; i < cnt; i++)
-				printf("0x%02X ", keycodes[i]);
+			printf("none");
+		for (i = 0; i < cnt; i++)
+			printf("0x%02X ", keycodes[i]);
 		putchar('\n');
 		kbd_input(ha, 0, keycodes, total);
 	}
