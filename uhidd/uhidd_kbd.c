@@ -107,7 +107,7 @@ struct kbd_data {
 #define	MOD_WIN_L	0x08
 #define	MOD_WIN_R	0x80
 
-	uint8_t keycode[MAX_KEYCODE];
+	uint16_t keycode[MAX_KEYCODE];
 	uint32_t time[MAX_KEYCODE];
 };
 
@@ -469,7 +469,7 @@ kbd_process_keys(struct kbd_dev *kd)
 {
 	uint32_t n_mod;
 	uint32_t o_mod;
-	uint8_t key;
+	uint16_t key;
 	int dtime, i, j;
 
 	n_mod = kd->ndata.mod;
@@ -629,7 +629,7 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 	unsigned int usage;
 	int cnt, flags, i;
 	uint8_t mod;
-	uint8_t keycodes[MAX_KEYCODE];	
+	uint16_t keycodes[MAX_KEYCODE];	
 
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
@@ -663,7 +663,7 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 }
 
 void
-kbd_input(struct hid_appcol *ha, uint8_t mod, uint8_t *keycodes, int key_cnt)
+kbd_input(struct hid_appcol *ha, uint8_t mod, uint16_t *keycodes, int key_cnt)
 {
 	struct kbd_dev *kd;
 	int i;

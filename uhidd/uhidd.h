@@ -288,7 +288,7 @@ int		hid_field_get_usage_max(struct hid_field *);
 void		hid_field_set_value(struct hid_field *, int, int);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
-void		kbd_input(struct hid_appcol *, uint8_t, uint8_t *, int);
+void		kbd_input(struct hid_appcol *, uint8_t, uint16_t *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
 void		kbd_set_tr(struct hid_appcol *, int (*)(int));
 int		mouse_match(struct hid_appcol *);
