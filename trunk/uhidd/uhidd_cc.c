@@ -187,7 +187,9 @@ int
 cc_match(struct hid_appcol *ha)
 {
 	struct hid_parent *hp;
-	unsigned int u;
+	struct hid_report *hr;
+	struct hid_field *hf;
+	unsigned int u, up;
 
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
@@ -196,8 +198,19 @@ cc_match(struct hid_appcol *ha)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
-	if (u == HID_USAGE2(HUP_CONSUMER, HUG_CONSUMER_CONTROL))
-		return (HID_MATCH_GENERAL);
+	if (u != HID_USAGE2(HUP_CONSUMER, HUG_CONSUMER_CONTROL))
+		return (HID_MATCH_NONE);
+
+	hr = NULL;
+	while ((hr = hid_appcol_get_next_report(ha, hr)) != NULL) {
+		hf = NULL;
+		while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) !=
+		    NULL) {
+			up = hid_field_get_usage_page(hf);
+			if (up == HUP_CONSUMER)
+				return (HID_MATCH_GENERAL);
+		}
+	}
 
 	return (HID_MATCH_NONE);
 }
@@ -222,7 +235,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 	struct hid_field *hf;
 	unsigned int usage, up;
 	int i, value, cnt, flags, total;
-	uint8_t keycodes[MAX_KEYCODE];
+	uint16_t keycodes[MAX_KEYCODE];
 
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
@@ -236,7 +249,6 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		flags = hid_field_get_flags(hf);
 		if (flags & HIO_CONST)
 			continue;
-		
 		for (i = 0; i < hf->hf_count; i++) {
 			up = hid_field_get_usage_page(hf);
 			if (up != HUP_CONSUMER)
