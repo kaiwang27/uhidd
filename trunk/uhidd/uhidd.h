@@ -136,13 +136,6 @@ struct hid_appcol_driver {
 	void (*ha_drv_recv_raw)(struct hid_appcol *, uint8_t *, int);
 };
 
-extern int hid_appcol_driver_num;
-extern struct hid_appcol_driver *hid_appcol_driver_list;
-extern struct hid_appcol_driver *kbd_driver;
-extern struct hid_appcol_driver *mouse_driver;
-extern struct hid_appcol_driver *ghid_driver;
-extern struct hid_appcol_driver *cc_driver;
-
 /*
  * Configuration.
  */
@@ -251,6 +244,14 @@ extern int verbose;
 extern struct uhidd_config uconfig;
 extern struct device_config clconfig;
 extern const char *config_file;
+extern int usage_consumer_num;
+extern const char **usage_consumer;
+extern int hid_appcol_driver_num;
+extern struct hid_appcol_driver *hid_appcol_driver_list;
+extern struct hid_appcol_driver *kbd_driver;
+extern struct hid_appcol_driver *mouse_driver;
+extern struct hid_appcol_driver *ghid_driver;
+extern struct hid_appcol_driver *cc_driver;
 
 /*
  * Prototypes.

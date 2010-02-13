@@ -1,7 +1,7 @@
 PROG=	uhidd
 SRCS=	uhidd.c uhidd_vhid.c uhidd_hidcore.c uhidd_hidump.c uhidd_kbd.c  \
 	uhidd_cc.c lex.l uhidd_mouse.c parser.y y.tab.h usage_in_page.c  \
-	usage_page.c uhidd_drivers.c
+	usage_page.c uhidd_drivers.c usage_consumer.c
 
 GENSRCS=	usage_in_page.c usage_page.c
 CLEANFILES=	${GENSRCS}
