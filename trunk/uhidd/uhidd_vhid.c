@@ -64,8 +64,6 @@ vhid_match(struct hid_appcol *ha)
 	if (!config_attach_hid(hp))
 		return (HID_MATCH_NONE);
 
-	
-
 	return (HID_MATCH_GHID);
 }
 
