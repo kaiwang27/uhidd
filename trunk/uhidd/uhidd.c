@@ -208,7 +208,6 @@ create_runtime_dir(void)
 	if (hp != NULL && hp->dev != NULL) {
 		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
 		    basename(hp->dev));
-		printf("dpath=%s\n", dpath);
 		mkdir(dpath, 0755);
 	}
 }
@@ -384,8 +383,8 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	req.wLength = ds;
 	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
 	if (e) {
-		syslog(LOG_ERR, "%s[iface:%d]=> libusb20_dev_request_sync"
-		    " failed", dev, ndx);
+		syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
+		    " failed", basename(dev), ndx);
 		return;
 	}
 
@@ -488,8 +487,8 @@ start_hid_parent(void *arg)
 	x |= 1;			/* IN transfer. */
 	xfer = libusb20_tr_get_pointer(hp->pdev, x);
 	if (xfer == NULL) {
-		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_get_pointer failed\n",
-		    hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
+		    basename(hp->dev), hp->ndx);
 		goto parent_end;
 	}
 
@@ -497,8 +496,8 @@ start_hid_parent(void *arg)
 	if (e == LIBUSB20_ERROR_BUSY) {
 		PRINT1("xfer already opened\n");
 	} else if (e) {
-		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_open failed\n",
-		    hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
+		    basename(hp->dev), hp->ndx);
 		goto parent_end;
 	}
 
@@ -569,15 +568,15 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	xfer = libusb20_tr_get_pointer(hp->pdev, x);
 	if (xfer == NULL) {
-		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_get_pointer failed\n",
-		    hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 
 	e = libusb20_tr_open(xfer, 4096, 1, XXX); /* FIXME */
 	if (e && e != LIBUSB20_ERROR_BUSY) {
-		syslog(LOG_ERR, "%s[iface:%d] libusb20_tr_open failed\n",
-		    hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 	
@@ -652,8 +651,8 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	req.wLength = len;
 	e = libusb20_dev_request_sync(hp->pdev, &req, buf, &actlen, len, 0);
 	if (e) {
-		syslog(LOG_ERR, "%s[iface:%d]=> libusb20_dev_request_sync"
-		    " failed", hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 
@@ -667,3 +666,4 @@ usage(void)
 	fprintf(stderr, "usage: uhidd [-cdhkmouv] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
+

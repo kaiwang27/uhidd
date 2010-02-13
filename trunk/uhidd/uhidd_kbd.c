@@ -581,8 +581,8 @@ kbd_attach(struct hid_appcol *ha)
 
 	/* Open /dev/vkbdctl. */
 	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
-		syslog(LOG_ERR, "%s[iface:%d]=> could not open /dev/vkbdctl:"
-		    " %m", hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl: %m",
+		    basename(hp->dev), hp->ndx);
 		if (verbose && errno == ENOENT)
 			PRINT1("vkbd.ko kernel module not loaded?\n")
 		return (-1);
@@ -590,8 +590,8 @@ kbd_attach(struct hid_appcol *ha)
 
 	if (verbose) {
 		if (fstat(kd->vkbd_fd, &sb) < 0) {
-			syslog(LOG_ERR, "%s[iface:%d]=> fstat: /dev/vkbdctl:"
-			    " %m", hp->dev, hp->ndx);
+			syslog(LOG_ERR, "%s[%d] fstat: /dev/vkbdctl: %m",
+			    basename(hp->dev), hp->ndx);
 			return (-1);
 		}
 		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));

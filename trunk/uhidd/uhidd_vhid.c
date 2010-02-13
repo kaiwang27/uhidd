@@ -93,21 +93,21 @@ vhid_attach(struct hid_appcol *ha)
 	 * Open a new virtual hid device.
 	 */
 	if ((hd->hidctl_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
-		syslog(LOG_ERR, "%s[iface:%d]=> could not open "
-		    "/dev/uvhidctl: %m", hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] could not open /dev/uvhidctl: %m",
+		    basename(hp->dev), hp->ndx);
 		if (verbose && errno == ENOENT)
 			PRINT1("uvhid.ko kernel moduel not loaded?\n")
 		return (-1);
 	}
 
 	if (fstat(hd->hidctl_fd, &sb) < 0) {
-		syslog(LOG_ERR, "%s[iface:%d]=> fstat: "
-		    "/dev/uvhidctl: %m", hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] fstat: /dev/uvhidctl: %m",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 
 	if ((hd->name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
-		syslog(LOG_ERR, "%s[iface:%d]=> strdup failed: %m", hp->dev,
+		syslog(LOG_ERR, "%s[%d] strdup failed: %m", basename(hp->dev),
 		    hp->ndx);
 		return (-1);
 	}
@@ -123,8 +123,8 @@ vhid_attach(struct hid_appcol *ha)
 	ugd.ugd_actlen = ha->ha_rsz;
 
 	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
-		syslog(LOG_ERR, "%s[iface:%d]=> "
-		    "ioctl(USB_SET_REPORT_DESC): %m", hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_DESC): %m",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 
@@ -142,8 +142,8 @@ vhid_attach(struct hid_appcol *ha)
 	}
 
 	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
-		syslog(LOG_ERR, "%s[iface:%d]=> ioctl(USB_SET_REPORT_ID): %m",
-		    hp->dev, hp->ndx);
+		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_ID): %m",
+		    basename(hp->dev), hp->ndx);
 		return (-1);
 	}
 
@@ -175,6 +175,6 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 	}
 
 	if (write(hd->hidctl_fd, buf, len) < 0)
-		syslog(LOG_ERR, "%s[iface:%d]=> write failed: %m", hp->dev,
+		syslog(LOG_ERR, "%s[%d] write failed: %m", basename(hp->dev),
 		    hp->ndx);
 }

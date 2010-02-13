@@ -177,8 +177,8 @@ cc_write_keymap_file(struct hid_parent *hp)
 	    basename(hp->dev), basename(hp->dev), hp->ndx);
 	fp = fopen(fpath, "w+");
 	if (fp == NULL) {
-		syslog(LOG_ERR, "%s[iface:%d]=> fopen %s failed: %m",
-		    hp->dev, hp->ndx, fpath);
+		syslog(LOG_ERR, "%s[%d] fopen %s failed: %m",
+		    basename(hp->dev), hp->ndx, fpath);
 		return;
 	}
 	fprintf(fp, "0x%04x:0x%04x={\n", hp->vendor_id, hp->product_id);

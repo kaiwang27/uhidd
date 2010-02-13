@@ -27,6 +27,7 @@
  */
 
 #include <sys/queue.h>
+#include <libgen.h>
 
 /*
  * HID parser.
@@ -199,41 +200,19 @@ struct hid_parent {
 	do {								\
 		char pb[64], pb2[1024];					\
 									\
-		snprintf(pb, sizeof(pb), "%s[iface:%d]", d, n);		\
+		snprintf(pb, sizeof(pb), "%s[%d]", basename(d), n);	\
 		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
-		printf("%s=> %s", pb, pb2);				\
+		printf("%s-> %s", pb, pb2);				\
 	} while (0);
 
 #define PRINT1(...)							\
 	do {								\
 		char pb[64], pb2[1024];					\
 									\
-		snprintf(pb, sizeof(pb), "%s[iface:%d]", hp->dev,	\
+		snprintf(pb, sizeof(pb), "%s[%d]", basename(hp->dev),	\
 		    hp->ndx);						\
 		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
-		printf("%s=> %s", pb, pb2);				\
-	} while (0);
-
-static inline const char *
-type_name(enum uhidd_ctype t)
-{
-
-	switch (t) {
-	case UHIDD_MOUSE: return "mouse";
-	case UHIDD_KEYBOARD: return "kbd";
-	case UHIDD_HID: return "hid";
-	default: return "unknown";
-	}
-}
-
-#define PRINT2(...)							\
-	do {								\
-		char pb[64], pb2[1024];					\
-									\
-		snprintf(pb, sizeof(pb), "%s[iface:%d][c%d:%s]",	\
-		    hp->dev, hp->ndx, hc->ndx, type_name(hc->type));	\
-		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
-		printf("%s=> %s", pb, pb2);				\
+		printf("%s-> %s", pb, pb2);				\
 	} while (0);
 
 /*
