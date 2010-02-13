@@ -28,12 +28,14 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
 #include <assert.h>
+#include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -64,6 +66,8 @@ static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 static void	*start_hid_parent(void *arg);
 static int	hid_set_report(void *context, int report_id, char *buf,
 		    int len);
+static void	create_runtime_dir(void);
+static void	remove_runtime_dir(void);
 static void	sighandler(int sig __unused);
 static void	terminate(int eval);
 
@@ -177,6 +181,8 @@ main(int argc, char **argv)
 	if (STAILQ_EMPTY(&hplist))
 		goto uhidd_end;
 
+	create_runtime_dir();
+
 	STAILQ_FOREACH(hp, &hplist, next) {
 		if (hp->hi != NULL)
 			pthread_create(&hp->thread, NULL, start_hid_parent,
@@ -193,10 +199,50 @@ uhidd_end:
 }
 
 static void
+create_runtime_dir(void)
+{
+	struct hid_parent *hp;
+	char dpath[PATH_MAX];
+
+	hp = STAILQ_FIRST(&hplist);
+	if (hp != NULL && hp->dev != NULL) {
+		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
+		    basename(hp->dev));
+		printf("dpath=%s\n", dpath);
+		mkdir(dpath, 0755);
+	}
+}
+
+static void
+remove_runtime_dir(void)
+{
+	struct hid_parent *hp;
+	struct dirent *d;
+	DIR *dir;
+	char dpath[PATH_MAX], fpath[PATH_MAX];
+
+	hp = STAILQ_FIRST(&hplist);
+	if (hp != NULL && hp->dev != NULL) {
+		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
+		    basename(hp->dev));
+		if ((dir = opendir(dpath)) != NULL) {
+			while ((d = readdir(dir)) != NULL) {
+				snprintf(fpath, sizeof(fpath), "%s/%s", dpath,
+				    d->d_name);
+				remove(fpath);
+			}
+			closedir(dir);
+			remove(dpath);
+		}
+	}
+}
+
+static void
 terminate(int eval)
 {
 
 	pidfile_remove(pfh);
+	remove_runtime_dir();
 	syslog(LOG_NOTICE, "terminated\n");
 
 	exit(eval);

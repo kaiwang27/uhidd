@@ -34,9 +34,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
+#include <assert.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
+#include <syslog.h>
 #include "uhidd.h"
 
 #define	HUG_CONSUMER_CONTROL		0x0001
@@ -167,8 +169,28 @@ static uint8_t free_key[] =
 static void
 cc_write_keymap_file(struct hid_parent *hp)
 {
+	char fpath[256];
+	FILE *fp;
+	int i;
 
-	(void) hp;
+	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/%s.%d.mmkeymap",
+	    basename(hp->dev), basename(hp->dev), hp->ndx);
+	fp = fopen(fpath, "w+");
+	if (fp == NULL) {
+		syslog(LOG_ERR, "%s[iface:%d]=> fopen %s failed: %m",
+		    hp->dev, hp->ndx, fpath);
+		return;
+	}
+	fprintf(fp, "0x%04x:0x%04x={\n", hp->vendor_id, hp->product_id);
+	fprintf(fp, "\tmmkeymap={\n");
+	for (i = 0; i < usage_consumer_num && i < _MAX_MM_KEY; i++) {
+		if (hp->mm_keymap[i]) {
+			fprintf(fp, "\t\t%s=", usage_consumer[i]);
+			fprintf(fp, "\"0x%02X\"\n", hp->mm_keymap[i]);
+		}
+	}
+	fprintf(fp, "\t}\n}\n");
+	fclose(fp);
 }
 
 static int
