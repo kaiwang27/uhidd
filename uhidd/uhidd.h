@@ -177,6 +177,8 @@ enum uhidd_ctype {
 	UHIDD_HID
 };
 
+#define	_MAX_MM_KEY	1024
+
 struct hid_parent {
 	const char			*dev;
 	struct libusb20_device		*pdev;
@@ -190,6 +192,8 @@ struct hid_parent {
 	uint8_t				 ep;
 	int				 pkt_sz;
 	int				 child_cnt;
+	uint8_t				 mm_keymap[_MAX_MM_KEY];
+	int				 mm_pos;
 	pthread_t			 thread;
 	STAILQ_ENTRY(hid_parent)	 next;
 };
@@ -290,7 +294,8 @@ int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
 void		kbd_input(struct hid_appcol *, uint8_t, uint16_t *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
-void		kbd_set_tr(struct hid_appcol *, int (*)(int));
+void		kbd_set_context(struct hid_appcol *, void *);
+void		kbd_set_tr(struct hid_appcol *, int (*)(void *, int));
 int		mouse_match(struct hid_appcol *);
 int		mouse_attach(struct hid_appcol *);
 void		mouse_recv(struct hid_appcol *, struct hid_report *);

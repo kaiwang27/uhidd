@@ -145,40 +145,64 @@ __FBSDID("$FreeBSD$");
 #define	HUG_AC_FORWARDMSG		0x028B
 #define	HUG_AC_SEND			0x028C
 
-#if 0
-static uint8_t free_keys[] =
+static uint8_t free_key[] =
 {
-	0x54, 0x55, 0x5A, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x6F, 0x71, 0x72, 0x74,
-	0x75, 0x7A, 0x7C, 0x7F
-};
-#endif
+	/* Free Keys. */
+	0x54, 0x5A, 0x5F, 0x60, 0x62, 0x63, 0x6F, 0x71, 0x72, 0x74,
+	0x75, 0x7A, 0x7C, 0x7F,
 
-/* Free KEY: 0x54 0x5A 0x5F 0x60 0x62 */
+	/* F13 - F24 */
+	0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D,
+	0x6E, 0x76,
+
+	/* Keyboard International 1-6 */
+	0x73, 0x70, 0x7D, 0x79, 0x7B, 0x5C,
+
+	/* Keyboard LANG 1-5 */
+	0xF2, 0xF1, 0x78, 0x77, 0x76
+};
+
+#define	_FREE_KEY_COUNT	((int)(sizeof(free_key)/sizeof(free_key[0])))
+
+static void
+cc_write_keymap_file(struct hid_parent *hp)
+{
+
+	(void) hp;
+}
 
 static int
-cc_tr(int hid_key)
+cc_tr(void *context, int hid_key)
 {
+	struct hid_parent *hp;
+
+	hp = context;
+	assert(hp != NULL);
 
 	/*
-	 * A pre-defined key translation table.
+	 * TODO: Check if there is a device specific key map.
 	 */
 
-	switch (hid_key) {
-	case HUG_VOLUME_UP:
-		return (0x5A);
-	case HUG_VOLUME_DOWN:
-		return (0x5F);
-	case HUG_PLAYPAUSE:
-		return (0x60);
-	case HUG_STOP:
-		return (0x62);
-	case HUG_MUTE:
-		return (0x63);
-	case HUG_PREVIOUS_TRACK:
-		return (0x6F);
-	case HUG_NEXT_TRACK:
-		return (0x71);
-	default:
+	/*
+	 * Check if there is a key translation in the in-memory keymap.
+	 */
+	if (hp->mm_keymap[hid_key] != 0)
+		return (hp->mm_keymap[hid_key]);
+
+	/*
+	 * Try allocating a free key for this "HID key".
+	 */
+	if (hp->mm_pos < _FREE_KEY_COUNT) {
+		hp->mm_keymap[hid_key] = free_key[hp->mm_pos];
+		hp->mm_pos++;
+		cc_write_keymap_file(hp);
+		if (verbose)
+			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
+			    hid_key, hp->mm_keymap[hid_key]);
+		return (hp->mm_keymap[hid_key]);
+	} else {
+		if (verbose)
+			PRINT1("no more free key for hid key: 0x%x\n", hid_key);
 		return (-1);
 	}
 }
@@ -218,9 +242,14 @@ cc_match(struct hid_appcol *ha)
 int
 cc_attach(struct hid_appcol *ha)
 {
+	struct hid_parent *hp;
+
+	hp = hid_appcol_get_interface_private(ha);
+	assert(hp != NULL);
 
 	if (kbd_attach(ha) < 0)
 		return (-1);
+	kbd_set_context(ha, hp);
 	kbd_set_tr(ha, cc_tr);
 
 	return (0);
