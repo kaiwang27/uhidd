@@ -185,8 +185,8 @@ struct hid_parent {
 	uint8_t				 ep;
 	int				 pkt_sz;
 	int				 child_cnt;
-	uint8_t				 mm_keymap[_MAX_MM_KEY];
-	int				 mm_pos;
+	uint8_t				 cc_keymap[_MAX_MM_KEY];
+	int				 free_key_pos;
 	pthread_t			 thread;
 	STAILQ_ENTRY(hid_parent)	 next;
 };
