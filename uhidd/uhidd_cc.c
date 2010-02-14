@@ -167,26 +167,26 @@ static uint8_t free_key[] =
 #define	_FREE_KEY_COUNT	((int)(sizeof(free_key)/sizeof(free_key[0])))
 
 static void
-cc_write_keymap_file(struct hid_parent *hp)
+cc_write_keymap_file(struct hid_interface *hi)
 {
 	char fpath[256];
 	FILE *fp;
 	int i;
 
 	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/%s.%d.cc_keymap",
-	    basename(hp->dev), basename(hp->dev), hp->ndx);
+	    basename(hi->dev), basename(hi->dev), hi->ndx);
 	fp = fopen(fpath, "w+");
 	if (fp == NULL) {
 		syslog(LOG_ERR, "%s[%d] fopen %s failed: %m",
-		    basename(hp->dev), hp->ndx, fpath);
+		    basename(hi->dev), hi->ndx, fpath);
 		return;
 	}
-	fprintf(fp, "0x%04x:0x%04x={\n", hp->vendor_id, hp->product_id);
+	fprintf(fp, "0x%04x:0x%04x={\n", hi->vendor_id, hi->product_id);
 	fprintf(fp, "\tcc_keymap={\n");
 	for (i = 0; i < usage_consumer_num && i < _MAX_MM_KEY; i++) {
-		if (hp->cc_keymap[i]) {
+		if (hi->cc_keymap[i]) {
 			fprintf(fp, "\t\t%s=", usage_consumer[i]);
-			fprintf(fp, "\"0x%02X\"\n", hp->cc_keymap[i]);
+			fprintf(fp, "\"0x%02X\"\n", hi->cc_keymap[i]);
 		}
 	}
 	fprintf(fp, "\t}\n}\n");
@@ -196,16 +196,16 @@ cc_write_keymap_file(struct hid_parent *hp)
 static int
 cc_tr(void *context, int hid_key)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct device_config *dconfig;
 
-	hp = context;
-	assert(hp != NULL);
+	hi = context;
+	assert(hi != NULL);
 
 	/*
 	 * Check if there is a user provided keymap.
 	 */
-	dconfig = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dconfig = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dconfig != NULL && dconfig->cc_keymap_set) {
 		if (dconfig->cc_keymap[hid_key] != 0)
 			return (dconfig->cc_keymap[hid_key]);
@@ -222,20 +222,20 @@ cc_tr(void *context, int hid_key)
 	/*
 	 * Check if there is a key translation in the in-memory keymap.
 	 */
-	if (hp->cc_keymap[hid_key] != 0)
-		return (hp->cc_keymap[hid_key]);
+	if (hi->cc_keymap[hid_key] != 0)
+		return (hi->cc_keymap[hid_key]);
 
 	/*
 	 * Try allocating a free key for this "HID key".
 	 */
-	if (hp->free_key_pos < _FREE_KEY_COUNT) {
-		hp->cc_keymap[hid_key] = free_key[hp->free_key_pos];
-		hp->free_key_pos++;
-		cc_write_keymap_file(hp);
+	if (hi->free_key_pos < _FREE_KEY_COUNT) {
+		hi->cc_keymap[hid_key] = free_key[hi->free_key_pos];
+		hi->free_key_pos++;
+		cc_write_keymap_file(hi);
 		if (verbose)
 			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
-			    hid_key, hp->cc_keymap[hid_key]);
-		return (hp->cc_keymap[hid_key]);
+			    hid_key, hi->cc_keymap[hid_key]);
+		return (hi->cc_keymap[hid_key]);
 	} else {
 		if (verbose)
 			PRINT1("no more free key for hid key: 0x%x\n", hid_key);
@@ -246,15 +246,15 @@ cc_tr(void *context, int hid_key)
 int
 cc_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_report *hr;
 	struct hid_field *hf;
 	unsigned int u, up;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
-	if (config_cc_attach(hp) <= 0)
+	if (config_cc_attach(hi) <= 0)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
@@ -278,14 +278,14 @@ cc_match(struct hid_appcol *ha)
 int
 cc_attach(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
 	if (kbd_attach(ha) < 0)
 		return (-1);
-	kbd_set_context(ha, hp);
+	kbd_set_context(ha, hi);
 	kbd_set_tr(ha, cc_tr);
 
 	return (0);
@@ -296,14 +296,14 @@ cc_attach(struct hid_appcol *ha)
 void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_field *hf;
 	unsigned int usage, up;
 	int i, value, cnt, flags, total;
 	uint16_t keycodes[MAX_KEYCODE];
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
 	total = 0;
 	cnt = 0;

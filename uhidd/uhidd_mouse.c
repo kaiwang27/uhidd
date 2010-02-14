@@ -56,13 +56,13 @@ struct mouse_dev {
 int
 mouse_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	unsigned int u;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
-	if (config_mouse_attach(hp) <= 0)
+	if (config_mouse_attach(hi) <= 0)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
@@ -75,11 +75,11 @@ mouse_match(struct hid_appcol *ha)
 int
 mouse_attach(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct mouse_dev *md;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
 	if ((md = calloc(1, sizeof(*md))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in mouse_attach: %m");
@@ -91,7 +91,7 @@ mouse_attach(struct hid_appcol *ha)
 	md->cons_fd = open("/dev/consolectl", O_RDWR);
 	if (md->cons_fd < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/consolectl: %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 
@@ -101,7 +101,7 @@ mouse_attach(struct hid_appcol *ha)
 void
 mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_field *hf;
 	struct mouse_dev *md;
 	struct mouse_info mi;
@@ -109,8 +109,8 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 	int has_wheel, has_twheel, has_z, flags;
 	int b, btn, dx, dy, dw, dt, dz, i;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 	md = hid_appcol_get_private(ha);
 	assert(md != NULL);
 
@@ -196,5 +196,5 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 
 	if (ioctl(md->cons_fd, CONS_MOUSECTL, &mi) < 0)
 		syslog(LOG_ERR, "%s[%d] could not submit mouse data:"
-		    " ioctl failed: %m", basename(hp->dev), hp->ndx);
+		    " ioctl failed: %m", basename(hi->dev), hi->ndx);
 }

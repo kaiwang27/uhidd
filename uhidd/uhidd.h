@@ -109,20 +109,20 @@ struct hid_appcol {
 	unsigned int ha_usage;
 	void *ha_data;
 	struct hid_appcol_driver *ha_drv;
-	struct hid_interface *ha_hi;
+	struct hid_parser *ha_hp;
 	unsigned char ha_rdesc[_MAX_RDESC_SIZE];
 	int ha_rsz;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
 	STAILQ_ENTRY(hid_appcol) ha_next;
 };
 
-struct hid_interface {
+struct hid_parser {
 	unsigned char		 rdesc[_MAX_RDESC_SIZE];
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
-	void			*hi_data;
-	int			 (*hi_write_callback)(void *, int, char *, int);
+	void			*hp_data;
+	int			 (*hp_write_callback)(void *, int, char *, int);
 	STAILQ_HEAD(, hid_appcol) halist;
 };
 
@@ -172,13 +172,13 @@ enum uhidd_ctype {
 	UHIDD_HID
 };
 
-struct hid_parent {
+struct hid_interface {
 	const char			*dev;
 	struct libusb20_device		*pdev;
 	struct libusb20_interface	*iface;
 	int				 vendor_id;
 	int				 product_id;
-	struct hid_interface		*hi;
+	struct hid_parser		*hp;
 	int				 ndx;
 	unsigned char			 rdesc[_MAX_RDESC_SIZE];
 	int				 rsz;
@@ -188,7 +188,7 @@ struct hid_parent {
 	uint8_t				 cc_keymap[_MAX_MM_KEY];
 	int				 free_key_pos;
 	pthread_t			 thread;
-	STAILQ_ENTRY(hid_parent)	 next;
+	STAILQ_ENTRY(hid_interface)	 next;
 };
 
 /*
@@ -208,8 +208,8 @@ struct hid_parent {
 	do {								\
 		char pb[64], pb2[1024];					\
 									\
-		snprintf(pb, sizeof(pb), "%s[%d]", basename(hp->dev),	\
-		    hp->ndx);						\
+		snprintf(pb, sizeof(pb), "%s[%d]", basename(hi->dev),	\
+		    hi->ndx);						\
 		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
 		printf("%s-> %s", pb, pb2);				\
 	} while (0);
@@ -240,21 +240,21 @@ int		cc_attach(struct hid_appcol *);
 void		cc_recv(struct hid_appcol *, struct hid_report *);
 void		dump_report_desc(unsigned char *, int);
 void		hexdump_report_desc(unsigned char *, int);
-struct hid_interface *hid_interface_alloc(unsigned char *, int, void *);
-void		hid_interface_free(struct hid_interface *);
-void		hid_interface_input_data(struct hid_interface *, char *, int);
-void		hid_interface_output_data(struct hid_interface *, int, char *,
+struct hid_parser *hid_parser_alloc(unsigned char *, int, void *);
+void		hid_parser_free(struct hid_parser *);
+void		hid_parser_input_data(struct hid_parser *, char *, int);
+void		hid_parser_output_data(struct hid_parser *, int, char *,
 		    int);
-void		*hid_interface_get_private(struct hid_interface *);
-void		hid_interface_set_private(struct hid_interface *, void *);
-void		hid_interface_set_write_callback(struct hid_interface *,
+void		*hid_parser_get_private(struct hid_parser *);
+void		hid_parser_set_private(struct hid_parser *, void *);
+void		hid_parser_set_write_callback(struct hid_parser *,
 		    int (*)(void *, int, char *, int));
 unsigned int	hid_appcol_get_usage(struct hid_appcol *);
 void		hid_appcol_set_private(struct hid_appcol *, void *);
 void		*hid_appcol_get_private(struct hid_appcol *);
 struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
 		    struct hid_report *);
-void		*hid_appcol_get_interface_private(struct hid_appcol *);
+void		*hid_appcol_get_parser_private(struct hid_appcol *);
 void		hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
 		    uint8_t *, int);
 void		hid_appcol_xfer_data(struct hid_appcol *, struct hid_report *);
@@ -279,13 +279,13 @@ int		mouse_match(struct hid_appcol *);
 int		mouse_attach(struct hid_appcol *);
 void		mouse_recv(struct hid_appcol *, struct hid_report *);
 struct device_config *config_find_device(int, int, int);
-int		config_mouse_attach(struct hid_parent *);
-int		config_kbd_attach(struct hid_parent *);
-int		config_vhid_attach(struct hid_parent *);
-int		config_cc_attach(struct hid_parent *);
+int		config_mouse_attach(struct hid_interface *);
+int		config_kbd_attach(struct hid_interface *);
+int		config_vhid_attach(struct hid_interface *);
+int		config_cc_attach(struct hid_interface *);
 void		config_init(void);
 int		config_read_file(void);
-int		config_vhid_strip_id(struct hid_parent *);
+int		config_vhid_strip_id(struct hid_interface *);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);

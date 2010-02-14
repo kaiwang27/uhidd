@@ -41,42 +41,42 @@ __FBSDID("$FreeBSD: trunk/uhidd/hidparser.c 19 2009-06-28 19:16:31Z kaiw27 $");
 #include "uhidd.h"
 
 static void	hid_clear_local(struct hid_state *c);
-static void	hid_parser_init(struct hid_interface * p);
-static void	hid_parser_dump(struct hid_interface * p);
+static void	hid_parser_init(struct hid_parser * p);
+static void	hid_parser_dump(struct hid_parser * p);
 
 static STAILQ_HEAD(, hid_driver) hdlist = STAILQ_HEAD_INITIALIZER(hdlist);
 
-struct hid_interface *
-hid_interface_alloc(unsigned char *rdesc, int rsz, void *data)
+struct hid_parser *
+hid_parser_alloc(unsigned char *rdesc, int rsz, void *data)
 {
-	struct hid_interface *hi;
+	struct hid_parser *hp;
 
-	hi = calloc(1, sizeof(*hi));
-	if (hi == NULL)
+	hp = calloc(1, sizeof(*hp));
+	if (hp == NULL)
 		err(1, "calloc");
-	memcpy(hi->rdesc, rdesc, rsz);
-	hi->rsz = rsz;
-	hi->hi_data = data;
-	STAILQ_INIT(&hi->halist);
-	hid_parser_init(hi);
+	memcpy(hp->rdesc, rdesc, rsz);
+	hp->rsz = rsz;
+	hp->hp_data = data;
+	STAILQ_INIT(&hp->halist);
+	hid_parser_init(hp);
 
-	return (hi);
+	return (hp);
 }
 
 void
-hid_interface_free(struct hid_interface *hi)
+hid_parser_free(struct hid_parser *hp)
 {
 
-	free(hi);
+	free(hp);
 }
 
 void
-hid_interface_input_data(struct hid_interface *hi, char *data, int len)
+hid_parser_input_data(struct hid_parser *hp, char *data, int len)
 {
 	struct hid_appcol *ha;
 	struct hid_report *hr;
 
-	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
+	STAILQ_FOREACH(ha, &hp->halist, ha_next) {
 		STAILQ_FOREACH(hr, &ha->ha_hrlist, hr_next) {
 			if (hr->hr_id == 0 || hr->hr_id == *data) {
 				hid_appcol_recv_data(ha, hr, data, len);
@@ -90,38 +90,38 @@ hid_interface_input_data(struct hid_interface *hi, char *data, int len)
 }
 
 void
-hid_interface_output_data(struct hid_interface *hi, int report_id, char *data,
+hid_parser_output_data(struct hid_parser *hp, int report_id, char *data,
     int len)
 {
 
-	if (hi->hi_write_callback == NULL)
+	if (hp->hp_write_callback == NULL)
 		return;
 
-	hi->hi_write_callback(hi->hi_data, report_id, data, len);
+	hp->hp_write_callback(hp->hp_data, report_id, data, len);
 }
 
 void
-hid_interface_set_private(struct hid_interface *hi, void *data)
+hid_parser_set_private(struct hid_parser *hp, void *data)
 {
 
-	assert(hi != NULL);
-	hi->hi_data = data;
+	assert(hp != NULL);
+	hp->hp_data = data;
 }
 
 void *
-hid_interface_get_private(struct hid_interface *hi)
+hid_parser_get_private(struct hid_parser *hp)
 {
 
-	assert(hi != NULL);
-	return (hi->hi_data);
+	assert(hp != NULL);
+	return (hp->hp_data);
 }
 
 void
-hid_interface_set_write_callback(struct hid_interface *hi,
+hid_parser_set_write_callback(struct hid_parser *hp,
     int (*write_callback)(void *, int, char *, int)) {
 
-	assert(hi != NULL);
-	hi->hi_write_callback = write_callback;
+	assert(hp != NULL);
+	hp->hp_write_callback = write_callback;
 }
 
 static struct hid_state *
@@ -159,19 +159,19 @@ hid_pop_state(struct hid_state *cur_hs)
 }
 
 static struct hid_appcol *
-hid_add_appcol(struct hid_interface *hi, unsigned int usage)
+hid_add_appcol(struct hid_parser *hp, unsigned int usage)
 {
 	struct hid_appcol *ha;
 
-	assert(hi != NULL);
+	assert(hp != NULL);
 	
 	if ((ha = calloc(1, sizeof(*ha))) == NULL)
 		return (NULL);
 
-	ha->ha_hi = hi;
+	ha->ha_hp = hp;
 	ha->ha_usage = usage;
 	STAILQ_INIT(&ha->ha_hrlist);
-	STAILQ_INSERT_TAIL(&hi->halist, ha, ha_next);
+	STAILQ_INSERT_TAIL(&hp->halist, ha, ha_next);
 
 	return (ha);
 }
@@ -261,7 +261,7 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 }
 
 static void
-hid_parser_init(struct hid_interface *hi)
+hid_parser_init(struct hid_parser *hp)
 {
 	struct hid_state *hs;
 	struct hid_appcol *ha;
@@ -282,7 +282,7 @@ hid_parser_init(struct hid_interface *hi)
 		}							\
 	} while(0)
 	
-	assert(hi != NULL);
+	assert(hp != NULL);
 
 	ha = NULL;
 	hr = NULL;
@@ -291,10 +291,10 @@ hid_parser_init(struct hid_interface *hi)
 	minset = 0;
 	nusage = 0;
 	collevel = 0;
-	ha_start = hi->rdesc;
+	ha_start = hp->rdesc;
 
-	b = hi->rdesc;
-	while (b < hi->rdesc + hi->rsz) {
+	b = hp->rdesc;
+	while (b < hp->rdesc + hp->rsz) {
 		bSize = *b++;
 
 		/* Skip long item */
@@ -355,7 +355,7 @@ hid_parser_init(struct hid_interface *hi)
 			case 10:	/* Collection */
 				if (dval == 0x01 && collevel == 0) {
 					/* Top-Level Application Collection */
-					ha = hid_add_appcol(hi, hs->usage);
+					ha = hid_add_appcol(hp, hs->usage);
 				}
 				collevel++;
 				hid_clear_local(hs);
@@ -498,12 +498,12 @@ hid_parser_init(struct hid_interface *hi)
 	}
 
 	if (verbose)
-		hid_parser_dump(hi);
+		hid_parser_dump(hp);
 
 	/*
 	 * Attach drivers.
 	 */
-	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
+	STAILQ_FOREACH(ha, &hp->halist, ha_next) {
 		mhd = NULL;
 		old_match = 0;
 		for (i = 0; i < hid_appcol_driver_num; i++) {
@@ -546,7 +546,7 @@ hid_clear_local(struct hid_state *hs)
 }
 
 static void
-hid_parser_dump(struct hid_interface *hi)
+hid_parser_dump(struct hid_parser *hp)
 {
 	struct hid_appcol *ha;
 	struct hid_report *hr;
@@ -579,7 +579,7 @@ hid_parser_dump(struct hid_interface *hi)
 	} while (0)
 		
 
-	STAILQ_FOREACH(ha, &hi->halist, ha_next) {
+	STAILQ_FOREACH(ha, &hp->halist, ha_next) {
 		up = HID_PAGE(ha->ha_usage);
 		u = HID_USAGE(ha->ha_usage);
 		printf("HID APPLICATION COLLECTION (%s) size(%d)\n",
@@ -626,11 +626,11 @@ hid_appcol_set_private(struct hid_appcol *ha, void *data)
 }
 
 void *
-hid_appcol_get_interface_private(struct hid_appcol *ha)
+hid_appcol_get_parser_private(struct hid_appcol *ha)
 {
 
-	assert(ha != NULL && ha->ha_hi != NULL);
-	return (ha->ha_hi->hi_data);
+	assert(ha != NULL && ha->ha_hp != NULL);
+	return (ha->ha_hp->hp_data);
 }
 
 void *
@@ -777,7 +777,7 @@ hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 	}
 	total = (total + 7) / 8;
 
-	hid_interface_output_data(ha->ha_hi, hr->hr_id, buf, total);
+	hid_parser_output_data(ha->ha_hp, hr->hr_id, buf, total);
 }
 
 int

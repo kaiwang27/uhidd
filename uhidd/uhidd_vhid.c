@@ -56,12 +56,12 @@ struct vhid_dev {
 int
 vhid_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
-	if (config_vhid_attach(hp) <= 0)
+	if (config_vhid_attach(hi) <= 0)
 		return (HID_MATCH_NONE);
 
 	return (HID_MATCH_GHID);
@@ -70,15 +70,15 @@ vhid_match(struct hid_appcol *ha)
 int
 vhid_attach(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_report *hr;
 	struct vhid_dev *hd;
 	struct stat sb;
 	struct usb_gen_descriptor ugd;
 	int rid;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
 	if ((hd = calloc(1, sizeof(*hd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in vhid_attach: %m");
@@ -92,7 +92,7 @@ vhid_attach(struct hid_appcol *ha)
 	 */
 	if ((hd->hidctl_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/uvhidctl: %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		if (verbose && errno == ENOENT)
 			PRINT1("uvhid.ko kernel moduel not loaded?\n")
 		return (-1);
@@ -100,13 +100,13 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (fstat(hd->hidctl_fd, &sb) < 0) {
 		syslog(LOG_ERR, "%s[%d] fstat: /dev/uvhidctl: %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 
 	if ((hd->name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
-		syslog(LOG_ERR, "%s[%d] strdup failed: %m", basename(hp->dev),
-		    hp->ndx);
+		syslog(LOG_ERR, "%s[%d] strdup failed: %m", basename(hi->dev),
+		    hi->ndx);
 		return (-1);
 	}
 
@@ -122,7 +122,7 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_DESC): %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 
@@ -141,7 +141,7 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_ID): %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 
@@ -151,12 +151,12 @@ vhid_attach(struct hid_appcol *ha)
 void
 vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct vhid_dev *hd;
 	int i;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 	hd = hid_appcol_get_private(ha);
 	assert(hd != NULL);
 
@@ -167,12 +167,12 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 		putchar('\n');
 	}
 
-	if (config_vhid_strip_id(hp) > 0) {
+	if (config_vhid_strip_id(hi) > 0) {
 		buf++;
 		len--;
 	}
 
 	if (write(hd->hidctl_fd, buf, len) < 0)
-		syslog(LOG_ERR, "%s[%d] write failed: %m", basename(hp->dev),
-		    hp->ndx);
+		syslog(LOG_ERR, "%s[%d] write failed: %m", basename(hi->dev),
+		    hi->ndx);
 }
