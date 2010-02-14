@@ -197,13 +197,27 @@ static int
 cc_tr(void *context, int hid_key)
 {
 	struct hid_parent *hp;
+	struct device_config *dconfig;
 
 	hp = context;
 	assert(hp != NULL);
 
 	/*
-	 * TODO: Check if there is a device specific key map.
+	 * Check if there is a user provided keymap.
 	 */
+	dconfig = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	if (dconfig != NULL && dconfig->cc_keymap_set) {
+		if (dconfig->cc_keymap[hid_key] != 0)
+			return (dconfig->cc_keymap[hid_key]);
+		else
+			return (-1);
+	}
+	if (uconfig.gconfig.cc_keymap_set) {
+		if (uconfig.gconfig.cc_keymap[hid_key] != 0)
+			return (uconfig.gconfig.cc_keymap[hid_key]);
+		else
+			return (-1);
+	}
 
 	/*
 	 * Check if there is a key translation in the in-memory keymap.
@@ -240,7 +254,7 @@ cc_match(struct hid_appcol *ha)
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
 
-	if (!config_attach_cc(hp))
+	if (!config_cc_attach(hp))
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);

@@ -35,6 +35,7 @@
 
 #define _MAX_RDESC_SIZE	16384
 #define _MAX_REPORT_IDS	256
+#define	_MAX_MM_KEY	1024
 #define MAXUSAGE 4096
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
@@ -145,19 +146,19 @@ struct device_config {
 	int vendor_id;
 	int product_id;
 	int interface;
-	int attach_mouse;
-	int attach_kbd;
-	int attach_hid;
-	int attach_cc;
+	int mouse_attach;
+	int kbd_attach;
+	int vhid_attach;
+	int cc_attach;
+	int cc_keymap_set;
+	uint8_t cc_keymap[_MAX_MM_KEY];
 	int detach_kernel_driver;
-	int strip_report_id;
-	STAILQ_HEAD(, hidaction_config) halist;
+	int vhid_strip_id;
 	STAILQ_ENTRY(device_config) next;
 };
 
 struct uhidd_config {
 	struct device_config gconfig;
-	STAILQ_HEAD(, hidaction_config) halist;
 	STAILQ_HEAD(, device_config) dclist;
 };
 
@@ -170,8 +171,6 @@ enum uhidd_ctype {
 	UHIDD_KEYBOARD,
 	UHIDD_HID
 };
-
-#define	_MAX_MM_KEY	1024
 
 struct hid_parent {
 	const char			*dev;
@@ -280,13 +279,13 @@ int		mouse_match(struct hid_appcol *);
 int		mouse_attach(struct hid_appcol *);
 void		mouse_recv(struct hid_appcol *, struct hid_report *);
 struct device_config *config_find_device(int, int, int);
-int		config_attach_mouse(struct hid_parent *);
-int		config_attach_kbd(struct hid_parent *);
-int		config_attach_hid(struct hid_parent *);
-int		config_attach_cc(struct hid_parent *);
+int		config_mouse_attach(struct hid_parent *);
+int		config_kbd_attach(struct hid_parent *);
+int		config_vhid_attach(struct hid_parent *);
+int		config_cc_attach(struct hid_parent *);
 void		config_init(void);
 int		config_read_file(void);
-int		config_strip_report_id(struct hid_parent *);
+int		config_vhid_strip_id(struct hid_parent *);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);

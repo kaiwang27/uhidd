@@ -1,6 +1,6 @@
 %{
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,18 +45,17 @@ int	yylex(void);
 
 %%
 
-yes			{ return (T_YES); }
-no			{ return (T_NO); }
-AttachMouse		{ return (T_ATTACHMOUSE); }
-AttachKeyboard		{ return (T_ATTACHKEYBOARD); }
-AttachHID		{ return (T_ATTACHHID); }
-DetachKernelDriver	{ return (T_DETACHKERNELDRIVER); }
-StripReportID		{ return (T_STRIPREPORTID); }
-global			{ return (T_GLOBAL); }
+default			{ return (T_DEFAULT); }
+mouse_attach		{ return (T_MOUSE_ATTACH); }
+kbd_attach		{ return (T_KBD_ATTACH); }
+vhid_attach		{ return (T_VHID_ATTACH); }
+vhid_strip_id		{ return (T_VHID_STRIP_REPORT_ID); }
+cc_attach		{ return (T_CC_ATTACH); }
+cc_keymap		{ return (T_CC_KEYMAP); }
 
 0x[0-9a-fA-F]+		{
 				yylval.val = strtoul(yytext, NULL, 16);
-				return (T_NUM);
+				return (T_HEX);
 			}
 
 [0-9]+			{
@@ -64,16 +63,27 @@ global			{ return (T_GLOBAL); }
 				return (T_NUM);
 			}
 
+\"[Yy][Ee][Ss]\"	{ return (T_YES); }
+
+\"[Nn][Oo]\"		{ return (T_NO); }
+
 \"[^"]+\"		{
 				yytext[yyleng - 1] = '\0';
 				yylval.str = strdup(yytext + 1);
 				return (T_STRING);
 			}
 
+[a-zA-Z_/]+		{
+				yytext[yyleng] = '\0';
+				yylval.str = strdup(yytext);
+				return (T_USAGE);
+}
+
 \:			{ return (':'); }
 \{			{ return ('{'); }
 \}			{ return ('}'); }
 \*			{ return ('*'); }
+=			{ return ('='); }
 [ \t]			/* whitespace */
 \#.*			/* comment */
 "\n"			{ lineno++; }

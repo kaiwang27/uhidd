@@ -551,7 +551,7 @@ kbd_match(struct hid_appcol *ha)
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
 
-	if (!config_attach_kbd(hp))
+	if (!config_kbd_attach(hp))
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
