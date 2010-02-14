@@ -121,6 +121,7 @@ struct hid_parser {
 	int			 rsz;
 	int			 rid[_MAX_REPORT_IDS];
 	int			 nr;
+	int			 hp_attached;
 	void			*hp_data;
 	int			 (*hp_write_callback)(void *, int, char *, int);
 	STAILQ_HEAD(, hid_appcol) halist;
@@ -184,7 +185,6 @@ struct hid_interface {
 	int				 rsz;
 	uint8_t				 ep;
 	int				 pkt_sz;
-	int				 child_cnt;
 	uint8_t				 cc_keymap[_MAX_MM_KEY];
 	int				 free_key_pos;
 	pthread_t			 thread;

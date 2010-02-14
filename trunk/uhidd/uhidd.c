@@ -184,12 +184,12 @@ main(int argc, char **argv)
 	create_runtime_dir();
 
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp != NULL)
+		if (hi->hp->hp_attached > 0)
 			pthread_create(&hi->thread, NULL, start_hid_interface,
 			    (void *)hi);
 	}
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp != NULL)
+		if (hi->hp->hp_attached > 0)
 			pthread_join(hi->thread, NULL);
 	}
 

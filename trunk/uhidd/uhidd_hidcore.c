@@ -516,14 +516,9 @@ hid_parser_init(struct hid_parser *hp)
 				}
 			}
 		}
-		if (mhd != NULL) {
-			if (verbose)
-				printf("find matching driver\n");
-			mhd->ha_drv_attach(ha);
+		if (mhd != NULL && mhd->ha_drv_attach(ha) == 0) {
 			ha->ha_drv = mhd;
-		} else {
-			if (verbose)
-				printf("no matching driver\n");
+			hp->hp_attached++;
 		}
 	}
 
