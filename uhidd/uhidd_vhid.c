@@ -61,7 +61,7 @@ vhid_match(struct hid_appcol *ha)
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
 
-	if (!config_vhid_attach(hp))
+	if (config_vhid_attach(hp) <= 0)
 		return (HID_MATCH_NONE);
 
 	return (HID_MATCH_GHID);
@@ -167,7 +167,7 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 		putchar('\n');
 	}
 
-	if (config_vhid_strip_id(hp)) {
+	if (config_vhid_strip_id(hp) > 0) {
 		buf++;
 		len--;
 	}

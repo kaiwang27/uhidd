@@ -173,7 +173,7 @@ cc_write_keymap_file(struct hid_parent *hp)
 	FILE *fp;
 	int i;
 
-	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/%s.%d.mmkeymap",
+	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/%s.%d.cc_keymap",
 	    basename(hp->dev), basename(hp->dev), hp->ndx);
 	fp = fopen(fpath, "w+");
 	if (fp == NULL) {
@@ -182,7 +182,7 @@ cc_write_keymap_file(struct hid_parent *hp)
 		return;
 	}
 	fprintf(fp, "0x%04x:0x%04x={\n", hp->vendor_id, hp->product_id);
-	fprintf(fp, "\tmmkeymap={\n");
+	fprintf(fp, "\tcc_keymap={\n");
 	for (i = 0; i < usage_consumer_num && i < _MAX_MM_KEY; i++) {
 		if (hp->cc_keymap[i]) {
 			fprintf(fp, "\t\t%s=", usage_consumer[i]);
@@ -254,7 +254,7 @@ cc_match(struct hid_appcol *ha)
 	hp = hid_appcol_get_interface_private(ha);
 	assert(hp != NULL);
 
-	if (!config_cc_attach(hp))
+	if (config_cc_attach(hp) <= 0)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);

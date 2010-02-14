@@ -143,7 +143,7 @@ mouse_attach
 		dconfig.mouse_attach = 1;
 	}
 	| T_MOUSE_ATTACH "=" T_NO {
-		dconfig.mouse_attach = 0;
+		dconfig.mouse_attach = -1;
 	}
 	;
 
@@ -152,7 +152,7 @@ kbd_attach
 		dconfig.kbd_attach = 1;
 	}
 	| T_KBD_ATTACH "=" T_NO {
-		dconfig.kbd_attach = 0;
+		dconfig.kbd_attach = -1;
 	}
 	;
 
@@ -161,7 +161,7 @@ cc_attach
 		dconfig.cc_attach = 1;
 	}
 	| T_CC_ATTACH "=" T_NO {
-		dconfig.cc_attach = 0;
+		dconfig.cc_attach = -1;
 	}
 	;
 
@@ -187,7 +187,7 @@ vhid_attach
 		dconfig.vhid_attach = 1;
 	}
 	| T_VHID_ATTACH "=" T_NO {
-		dconfig.vhid_attach = 0;
+		dconfig.vhid_attach = -1;
 	}
 	;
 
@@ -196,7 +196,7 @@ vhid_strip_id
 		dconfig.vhid_strip_id = 1;
 	}
 	| T_VHID_STRIP_REPORT_ID "=" T_NO {
-		dconfig.vhid_strip_id = 0;
+		dconfig.vhid_strip_id = -1;
 	}
 
 %%
@@ -236,15 +236,6 @@ config_init(void)
 {
 
 	STAILQ_INIT(&uconfig.dclist);
-
-	/*
-	 * Set default values for command line config.
-	 */
-	clconfig.mouse_attach = -1;
-	clconfig.kbd_attach = -1;
-	clconfig.vhid_attach = -1;
-	clconfig.cc_attach = -1;
-	clconfig.vhid_strip_id = -1;
 }
 
 int
@@ -288,9 +279,9 @@ config_mouse_attach(struct hid_parent *hp)
 	struct device_config *dc;
 
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
+	if (dc != NULL && dc->mouse_attach)
 		return (dc->mouse_attach);
-	if (clconfig.mouse_attach != -1)
+	if (clconfig.mouse_attach)
 		return (clconfig.mouse_attach);
 
 	return (uconfig.gconfig.mouse_attach);
@@ -302,9 +293,9 @@ config_kbd_attach(struct hid_parent *hp)
 	struct device_config *dc;
 
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
+	if (dc != NULL && dc->kbd_attach)
 		return (dc->kbd_attach);
-	if (clconfig.kbd_attach != -1)
+	if (clconfig.kbd_attach)
 		return (clconfig.kbd_attach);
 
 	return (uconfig.gconfig.kbd_attach);
@@ -316,9 +307,9 @@ config_vhid_attach(struct hid_parent *hp)
 	struct device_config *dc;
 
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
+	if (dc != NULL && dc->vhid_attach)
 		return (dc->vhid_attach);
-	if (clconfig.vhid_attach != -1)
+	if (clconfig.vhid_attach)
 		return (clconfig.vhid_attach);
 
 	return (uconfig.gconfig.vhid_attach);
@@ -330,9 +321,9 @@ config_cc_attach(struct hid_parent *hp)
 	struct device_config *dc;
 
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
+	if (dc != NULL && dc->cc_attach)
 		return (dc->cc_attach);
-	if (clconfig.cc_attach != -1)
+	if (clconfig.cc_attach)
 		return (clconfig.cc_attach);
 
 	return (uconfig.gconfig.cc_attach);
@@ -344,9 +335,9 @@ config_vhid_strip_id(struct hid_parent *hp)
 	struct device_config *dc;
 
 	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
-	if (dc != NULL)
+	if (dc != NULL && dc->vhid_strip_id)
 		return (dc->vhid_strip_id);
-	if (clconfig.vhid_strip_id != -1)
+	if (clconfig.vhid_strip_id)
 		return (clconfig.vhid_strip_id);
 
 	return (uconfig.gconfig.vhid_strip_id);
