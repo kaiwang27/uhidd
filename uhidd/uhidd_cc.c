@@ -173,8 +173,8 @@ cc_write_keymap_file(struct hid_interface *hi)
 	FILE *fp;
 	int i;
 
-	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/%s.%d.cc_keymap",
-	    basename(hi->dev), basename(hi->dev), hi->ndx);
+	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/cc_keymap",
+	    basename(hi->dev));
 	fp = fopen(fpath, "w+");
 	if (fp == NULL) {
 		syslog(LOG_ERR, "%s[%d] fopen %s failed: %m",
