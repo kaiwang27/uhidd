@@ -86,7 +86,7 @@ main(int argc, char **argv)
 
 	config_init();
 
-	while ((opt = getopt(argc, argv, "cdhkKmMosuv")) != -1) {
+	while ((opt = getopt(argc, argv, "c:dhkKmMosuv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -95,19 +95,19 @@ main(int argc, char **argv)
 			detach = 0;
 			break;
 		case 'h':
-			clconfig.attach_hid = 1;
+			clconfig.vhid_attach = 1;
 			break;
 		case 'k':
-			clconfig.attach_kbd = 1;
+			clconfig.kbd_attach = 1;
 			break;
 		case 'm':
-			clconfig.attach_mouse = 1;
+			clconfig.mouse_attach = 1;
 			break;
 		case 'o':
-			clconfig.attach_cc = 1;
+			clconfig.cc_attach = 1;
 			break;
 		case 's':
-			clconfig.strip_report_id = 1;
+			clconfig.vhid_strip_id = 1;
 			break;
 		case 'u':
 			clconfig.detach_kernel_driver = 1;

@@ -1,19 +1,14 @@
 # comment
-global {
-	AttachMouse yes
-	AttachKeyboard no
-	AttachHID yes
-	"Consumer:AC Pan" 1 0 "mixer -f $1 vol +1"
-	"Generic Desktop:Wheel" 1 0 "mixer -f $1 vol +1"
-	"Consumer:Volume_Up" 1 0 "mixer -f $1 vol +1"
-	"Consumer:Volume_Down" 1 0 "mixer -f $1 vol -1"
+default={
+	mouse_attach="yes"
+	kbd_attach="no"
+	vhid_attach="yes"
+	cc_keymap={
+		Volume_Increment="0x72"
+		Volume_Decrement="0x64"
+	}
 }
 
-0x1234:0x5678:1 {
-	AttachKeyboard yes
-	"Consumer:Volume_Up" 1 0 "mixer -f $1 vol +1"
+0x1234:0x5678:1={
+	kbd_attach="yes"
 }
-
-#0x045e:0x009d:0 {
-#	Attach no
-#}
