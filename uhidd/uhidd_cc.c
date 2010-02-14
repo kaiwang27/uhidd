@@ -184,9 +184,9 @@ cc_write_keymap_file(struct hid_parent *hp)
 	fprintf(fp, "0x%04x:0x%04x={\n", hp->vendor_id, hp->product_id);
 	fprintf(fp, "\tmmkeymap={\n");
 	for (i = 0; i < usage_consumer_num && i < _MAX_MM_KEY; i++) {
-		if (hp->mm_keymap[i]) {
+		if (hp->cc_keymap[i]) {
 			fprintf(fp, "\t\t%s=", usage_consumer[i]);
-			fprintf(fp, "\"0x%02X\"\n", hp->mm_keymap[i]);
+			fprintf(fp, "\"0x%02X\"\n", hp->cc_keymap[i]);
 		}
 	}
 	fprintf(fp, "\t}\n}\n");
@@ -222,20 +222,20 @@ cc_tr(void *context, int hid_key)
 	/*
 	 * Check if there is a key translation in the in-memory keymap.
 	 */
-	if (hp->mm_keymap[hid_key] != 0)
-		return (hp->mm_keymap[hid_key]);
+	if (hp->cc_keymap[hid_key] != 0)
+		return (hp->cc_keymap[hid_key]);
 
 	/*
 	 * Try allocating a free key for this "HID key".
 	 */
-	if (hp->mm_pos < _FREE_KEY_COUNT) {
-		hp->mm_keymap[hid_key] = free_key[hp->mm_pos];
-		hp->mm_pos++;
+	if (hp->free_key_pos < _FREE_KEY_COUNT) {
+		hp->cc_keymap[hid_key] = free_key[hp->free_key_pos];
+		hp->free_key_pos++;
 		cc_write_keymap_file(hp);
 		if (verbose)
 			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
-			    hid_key, hp->mm_keymap[hid_key]);
-		return (hp->mm_keymap[hid_key]);
+			    hid_key, hp->cc_keymap[hid_key]);
+		return (hp->cc_keymap[hid_key]);
 	} else {
 		if (verbose)
 			PRINT1("no more free key for hid key: 0x%x\n", hid_key);
