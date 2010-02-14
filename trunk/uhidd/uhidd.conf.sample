@@ -12,3 +12,38 @@ default={
 0x1234:0x5678:1={
 	kbd_attach="yes"
 }
+
+0x045e:0x00f9={
+	cc_keymap={
+		Help="0x68"
+		Scan_Next_Track="0x5F"
+		Scan_Previous_Track="0x5A"
+		Play/Pause="0x54"
+		Mute="0x60"
+		Volume_Increment="0x63"
+		Volume_Decrement="0x62"
+		AL_Programmable_Button_Configuration="0x6F"
+		AL_Email_Reader="0x7F"
+		AL_Calculator="0x71"
+		AL_Logoff="0x72"
+		AL_Documents="0x64"
+		AL_Spell_Check="0x70"
+		AL_Image_Browser="0x7C"
+		AL_Audio_Browser="0x7A"
+		AC_New="0x6B"
+		AC_Open="0x6C"
+		AC_Close="0x6D"
+		AC_Save="0x7D"
+		AC_Print="0x79"
+		AC_Undo="0x69"
+		AC_Home="0x65"
+		AC_Back="0x66"
+		AC_Forward="0x67"
+		AC_Zoom_In="0x75"
+		AC_Zoom_Out="0x74"
+		AC_Redo/Repeat="0x6A"
+		AC_Reply="0x6E"
+		AC_Forward_Msg="0x76"
+		AC_Send="0x73"
+	}
+}
