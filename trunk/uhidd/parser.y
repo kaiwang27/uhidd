@@ -274,11 +274,11 @@ config_find_device(int vendor, int product, int iface)
 }
 
 int
-config_mouse_attach(struct hid_parent *hp)
+config_mouse_attach(struct hid_interface *hi)
 {
 	struct device_config *dc;
 
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dc != NULL && dc->mouse_attach)
 		return (dc->mouse_attach);
 	if (clconfig.mouse_attach)
@@ -288,11 +288,11 @@ config_mouse_attach(struct hid_parent *hp)
 }
 
 int
-config_kbd_attach(struct hid_parent *hp)
+config_kbd_attach(struct hid_interface *hi)
 {
 	struct device_config *dc;
 
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dc != NULL && dc->kbd_attach)
 		return (dc->kbd_attach);
 	if (clconfig.kbd_attach)
@@ -302,11 +302,11 @@ config_kbd_attach(struct hid_parent *hp)
 }
 
 int
-config_vhid_attach(struct hid_parent *hp)
+config_vhid_attach(struct hid_interface *hi)
 {
 	struct device_config *dc;
 
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dc != NULL && dc->vhid_attach)
 		return (dc->vhid_attach);
 	if (clconfig.vhid_attach)
@@ -316,11 +316,11 @@ config_vhid_attach(struct hid_parent *hp)
 }
 
 int
-config_cc_attach(struct hid_parent *hp)
+config_cc_attach(struct hid_interface *hi)
 {
 	struct device_config *dc;
 
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dc != NULL && dc->cc_attach)
 		return (dc->cc_attach);
 	if (clconfig.cc_attach)
@@ -330,11 +330,11 @@ config_cc_attach(struct hid_parent *hp)
 }
 
 int
-config_vhid_strip_id(struct hid_parent *hp)
+config_vhid_strip_id(struct hid_interface *hi)
 {
 	struct device_config *dc;
 
-	dc = config_find_device(hp->vendor_id, hp->product_id, hp->ndx);
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dc != NULL && dc->vhid_strip_id)
 		return (dc->vhid_strip_id);
 	if (clconfig.vhid_strip_id)

@@ -55,7 +55,7 @@ int verbose = 0;
 
 static int detach = 1;
 static struct pidfh *pfh = NULL;
-static STAILQ_HEAD(, hid_parent) hplist;
+static STAILQ_HEAD(, hid_interface) hilist;
 
 static void	usage(void);
 static int	find_and_attach(struct libusb20_backend *backend,
@@ -63,7 +63,7 @@ static int	find_and_attach(struct libusb20_backend *backend,
 static int	attach_dev(const char *dev, struct libusb20_device *pdev);
 static void	attach_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
-static void	*start_hid_parent(void *arg);
+static void	*start_hid_interface(void *arg);
 static int	hid_set_report(void *context, int report_id, char *buf,
 		    int len);
 static void	create_runtime_dir(void);
@@ -74,7 +74,7 @@ static void	terminate(int eval);
 int
 main(int argc, char **argv)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct libusb20_backend *backend;
 	char *pid_file;
 	pid_t otherpid;
@@ -169,7 +169,7 @@ main(int argc, char **argv)
 		goto uhidd_end;
 	}
 
-	STAILQ_INIT(&hplist);
+	STAILQ_INIT(&hilist);
 
 	if (find_and_attach(backend, *argv) < 0) {
 		eval = 1;
@@ -178,19 +178,19 @@ main(int argc, char **argv)
 
 	libusb20_be_free(backend);
 
-	if (STAILQ_EMPTY(&hplist))
+	if (STAILQ_EMPTY(&hilist))
 		goto uhidd_end;
 
 	create_runtime_dir();
 
-	STAILQ_FOREACH(hp, &hplist, next) {
-		if (hp->hi != NULL)
-			pthread_create(&hp->thread, NULL, start_hid_parent,
-			    (void *)hp);
+	STAILQ_FOREACH(hi, &hilist, next) {
+		if (hi->hp != NULL)
+			pthread_create(&hi->thread, NULL, start_hid_interface,
+			    (void *)hi);
 	}
-	STAILQ_FOREACH(hp, &hplist, next) {
-		if (hp->hi != NULL)
-			pthread_join(hp->thread, NULL);
+	STAILQ_FOREACH(hi, &hilist, next) {
+		if (hi->hp != NULL)
+			pthread_join(hi->thread, NULL);
 	}
 
 uhidd_end:
@@ -201,13 +201,13 @@ uhidd_end:
 static void
 create_runtime_dir(void)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	char dpath[PATH_MAX];
 
-	hp = STAILQ_FIRST(&hplist);
-	if (hp != NULL && hp->dev != NULL) {
+	hi = STAILQ_FIRST(&hilist);
+	if (hi != NULL && hi->dev != NULL) {
 		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
-		    basename(hp->dev));
+		    basename(hi->dev));
 		mkdir(dpath, 0755);
 	}
 }
@@ -215,15 +215,15 @@ create_runtime_dir(void)
 static void
 remove_runtime_dir(void)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct dirent *d;
 	DIR *dir;
 	char dpath[PATH_MAX], fpath[PATH_MAX];
 
-	hp = STAILQ_FIRST(&hplist);
-	if (hp != NULL && hp->dev != NULL) {
+	hi = STAILQ_FIRST(&hilist);
+	if (hi != NULL && hi->dev != NULL) {
 		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
-		    basename(hp->dev));
+		    basename(hi->dev));
 		if ((dir = opendir(dpath)) != NULL) {
 			while ((d = readdir(dir)) != NULL) {
 				snprintf(fpath, sizeof(fpath), "%s/%s", dpath,
@@ -333,7 +333,7 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 {
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct libusb20_endpoint *ep;
 	unsigned char rdesc[16384];
 	int desc, ds, e, j, pos, size;
@@ -392,20 +392,20 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 	 * Allocate a hid parent device.
 	 */
 
-	hp = calloc(1, sizeof(*hp));
-	if (hp == NULL) {
+	hi = calloc(1, sizeof(*hi));
+	if (hi == NULL) {
 		syslog(LOG_ERR, "calloc failed: %m");
 		exit(1);
 	}
-	hp->dev = dev;
-	hp->pdev = pdev;
-	hp->iface = iface;
-	hp->ndx = ndx;
-	memcpy(hp->rdesc, rdesc, actlen);
-	hp->rsz = actlen;
+	hi->dev = dev;
+	hi->pdev = pdev;
+	hi->iface = iface;
+	hi->ndx = ndx;
+	memcpy(hi->rdesc, rdesc, actlen);
+	hi->rsz = actlen;
 	ddesc = libusb20_dev_get_device_desc(pdev);
-	hp->vendor_id = ddesc->idVendor;
-	hp->product_id = ddesc->idProduct;
+	hi->vendor_id = ddesc->idVendor;
+	hi->product_id = ddesc->idProduct;
 
 	/*
 	 * Find the input interrupt endpoint.
@@ -417,31 +417,31 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		    LIBUSB20_TRANSFER_TYPE_INTERRUPT &&
 		    ((ep->desc.bEndpointAddress & LIBUSB20_ENDPOINT_DIR_MASK) ==
 		    LIBUSB20_ENDPOINT_IN)) {
-			hp->ep = ep->desc.bEndpointAddress;
-			hp->pkt_sz = ep->desc.wMaxPacketSize;
+			hi->ep = ep->desc.bEndpointAddress;
+			hi->pkt_sz = ep->desc.wMaxPacketSize;
 			if (verbose) {
-				PRINT1("Find IN interrupt ep: %#x", hp->ep);
-				printf(" packet_size=%#x\n", hp->pkt_sz);
+				PRINT1("Find IN interrupt ep: %#x", hi->ep);
+				printf(" packet_size=%#x\n", hi->pkt_sz);
 			}
 			break;
 		}
 	}
-	if (hp->ep == 0) {
+	if (hi->ep == 0) {
 		PRINT1("does not have IN interrupt ep\n");
-		free(hp);
+		free(hi);
 		return;
 	}
 
-	hp->hi = hid_interface_alloc(hp->rdesc, hp->rsz, hp);
-	hid_interface_set_write_callback(hp->hi, hid_set_report);
+	hi->hp = hid_parser_alloc(hi->rdesc, hi->rsz, hi);
+	hid_parser_set_write_callback(hi->hp, hid_set_report);
 
-	STAILQ_INSERT_TAIL(&hplist, hp, next);
+	STAILQ_INSERT_TAIL(&hilist, hi, next);
 }
 
 static void *
-start_hid_parent(void *arg)
+start_hid_interface(void *arg)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct libusb20_backend *backend;
 	struct libusb20_transfer *xfer;
 	struct libusb20_device *pdev;
@@ -451,14 +451,14 @@ start_hid_parent(void *arg)
 	uint8_t x;
 	int e, i;
 
-	hp = arg;
-	assert(hp != NULL);
+	hi = arg;
+	assert(hi != NULL);
 
 	if (verbose)
 		PRINT1("HID parent started\n");
 
-	if (sscanf(hp->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
-		syslog(LOG_ERR, "%s not found", hp->dev);
+	if (sscanf(hi->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+		syslog(LOG_ERR, "%s not found", hi->dev);
 		return (NULL);
 	}
 
@@ -471,33 +471,33 @@ start_hid_parent(void *arg)
 			if (e != 0) {
 				syslog(LOG_ERR,
 				    "%s: libusb20_dev_open failed\n",
-				    hp->dev);
+				    hi->dev);
 				return (NULL);
 			}
 			break;
 		}
 	}
 	if (pdev == NULL) {
-		syslog(LOG_ERR, "%s not found", hp->dev);
+		syslog(LOG_ERR, "%s not found", hi->dev);
 		return (NULL);
 	}
-	hp->pdev = pdev;
+	hi->pdev = pdev;
 
-	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
+	x = (hi->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	x |= 1;			/* IN transfer. */
-	xfer = libusb20_tr_get_pointer(hp->pdev, x);
+	xfer = libusb20_tr_get_pointer(hi->pdev, x);
 	if (xfer == NULL) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		goto parent_end;
 	}
 
-	e = libusb20_tr_open(xfer, 4096, 1, hp->ep);
+	e = libusb20_tr_open(xfer, 4096, 1, hi->ep);
 	if (e == LIBUSB20_ERROR_BUSY) {
 		PRINT1("xfer already opened\n");
 	} else if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		goto parent_end;
 	}
 
@@ -508,18 +508,18 @@ start_hid_parent(void *arg)
 			continue;
 		}
 
-		libusb20_tr_setup_intr(xfer, buf, hp->pkt_sz, 0);
+		libusb20_tr_setup_intr(xfer, buf, hi->pkt_sz, 0);
 
 		libusb20_tr_start(xfer);
 
 		for (;;) {
-			if (libusb20_dev_process(hp->pdev) != 0) {
+			if (libusb20_dev_process(hi->pdev) != 0) {
 				PRINT1(" device detached?\n");
 				goto parent_end;
 			}
 			if (libusb20_tr_pending(xfer) == 0)
 				break;
-			libusb20_dev_wait_process(hp->pdev, -1);
+			libusb20_dev_wait_process(hi->pdev, -1);
 		}
 
 		switch (libusb20_tr_get_status(xfer)) {
@@ -531,7 +531,7 @@ start_hid_parent(void *arg)
 					printf("%02d ", buf[i]);
 				putchar('\n');
 			}
-			hid_interface_input_data(hp->hi, buf, actlen);
+			hid_parser_input_data(hi->hp, buf, actlen);
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
 			if (verbose)
@@ -556,27 +556,27 @@ parent_end:
 int
 hid_interrupt_out(void *context, int report_id, char *buf, int len)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct libusb20_transfer *xfer;
 	uint32_t actlen;
 	uint8_t x;
 	int e, i, size;
 
-	hp = context;
-	assert(hp != NULL && hp->pdev != NULL);
+	hi = context;
+	assert(hi != NULL && hi->pdev != NULL);
 
-	x = (hp->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
-	xfer = libusb20_tr_get_pointer(hp->pdev, x);
+	x = (hi->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
+	xfer = libusb20_tr_get_pointer(hi->pdev, x);
 	if (xfer == NULL) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 
 	e = libusb20_tr_open(xfer, 4096, 1, XXX); /* FIXME */
 	if (e && e != LIBUSB20_ERROR_BUSY) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 	
@@ -593,13 +593,13 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 		libusb20_tr_start(xfer);
 
 		for (;;) {
-			if (libusb20_dev_process(hp->pdev) != 0) {
+			if (libusb20_dev_process(hi->pdev) != 0) {
 				PRINT1(" device detached?\n");
 				return (-1);
 			}
 			if (libusb20_tr_pending(xfer) == 0)
 				break;
-			libusb20_dev_wait_process(hp->pdev, -1);
+			libusb20_dev_wait_process(hi->pdev, -1);
 		}
 
 		switch (libusb20_tr_get_status(xfer)) {
@@ -635,24 +635,24 @@ static int
 hid_set_report(void *context, int report_id, char *buf, int len)
 {
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	uint16_t actlen;
 	int e;
 
-	hp = context;
-	assert(hp != NULL && hp->pdev != NULL);
+	hi = context;
+	assert(hi != NULL && hi->pdev != NULL);
 
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_OUT |
 	    LIBUSB20_REQUEST_TYPE_CLASS | LIBUSB20_RECIPIENT_INTERFACE;
 	req.bRequest = 0x09;	/* SET_REPORT */
 	req.wValue = (0x02 << 8) | (report_id & 0xff); /* FIXME report type */
-	req.wIndex = hp->ndx;
+	req.wIndex = hi->ndx;
 	req.wLength = len;
-	e = libusb20_dev_request_sync(hp->pdev, &req, buf, &actlen, len, 0);
+	e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, len, 0);
 	if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
 

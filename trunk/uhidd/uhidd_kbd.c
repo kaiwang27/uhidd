@@ -545,13 +545,13 @@ kbd_process_keys(struct kbd_dev *kd)
 int
 kbd_match(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	unsigned int u;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
-	if (config_kbd_attach(hp) <= 0)
+	if (config_kbd_attach(hi) <= 0)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
@@ -564,13 +564,13 @@ kbd_match(struct hid_appcol *ha)
 int
 kbd_attach(struct hid_appcol *ha)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct kbd_dev *kd;
 	struct stat sb;
 	unsigned int u;
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 
 	if ((kd = calloc(1, sizeof(*kd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in kbd_attach: %m");
@@ -582,7 +582,7 @@ kbd_attach(struct hid_appcol *ha)
 	/* Open /dev/vkbdctl. */
 	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl: %m",
-		    basename(hp->dev), hp->ndx);
+		    basename(hi->dev), hi->ndx);
 		if (verbose && errno == ENOENT)
 			PRINT1("vkbd.ko kernel module not loaded?\n")
 		return (-1);
@@ -591,7 +591,7 @@ kbd_attach(struct hid_appcol *ha)
 	if (verbose) {
 		if (fstat(kd->vkbd_fd, &sb) < 0) {
 			syslog(LOG_ERR, "%s[%d] fstat: /dev/vkbdctl: %m",
-			    basename(hp->dev), hp->ndx);
+			    basename(hi->dev), hi->ndx);
 			return (-1);
 		}
 		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
@@ -620,15 +620,15 @@ kbd_attach(struct hid_appcol *ha)
 void
 kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_field *hf;
 	unsigned int usage;
 	int cnt, flags, i;
 	uint8_t mod;
 	uint16_t keycodes[MAX_KEYCODE];	
 
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 	mod = 0;
 	cnt = 0;
 	hf = NULL;
@@ -718,7 +718,7 @@ kbd_task(void *arg)
 static void *
 kbd_status_task(void *arg)
 {
-	struct hid_parent *hp;
+	struct hid_interface *hi;
 	struct hid_appcol *ha;
 	struct hid_report *hr;
 	struct hid_field *hf;
@@ -729,8 +729,8 @@ kbd_status_task(void *arg)
 
 	ha = arg;
 	assert(ha != NULL);
-	hp = hid_appcol_get_interface_private(ha);
-	assert(hp != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
 	kd = hid_appcol_get_private(ha);
 	assert(kd != NULL);
 
