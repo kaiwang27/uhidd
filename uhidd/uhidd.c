@@ -637,7 +637,7 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_interface *hi;
 	uint16_t actlen;
-	int e;
+	int e, i;
 
 	hi = context;
 	assert(hi != NULL && hi->pdev != NULL);
@@ -654,6 +654,12 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 		syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
 		    basename(hi->dev), hi->ndx);
 		return (-1);
+	}
+	if (verbose) {
+		PRINT1("set_report: id(%d)", report_id);
+		for (i = 0; i < len; i++)
+			printf(" %d", buf[i]);
+		putchar('\n');
 	}
 
 	return (0);
