@@ -648,7 +648,7 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
-	if (verbose) {
+	if (verbose > 1) {
 		PRINT1("mod(0x%02x) key codes: ", mod);
 		for (i = 0; i < cnt; i++)
 			printf("0x%02x ", keycodes[i]);
@@ -742,7 +742,7 @@ kbd_status_task(void *arg)
 			continue;
 		}
 		if (verbose)
-			PRINT1("status changed: leds=0x%x\n", vs.leds);
+			PRINT1("kbd status changed: leds=0x%x\n", vs.leds);
 		hr = NULL;
 		while ((hr = hid_appcol_get_next_report(ha, hr)) != NULL) {
 			found = 0;

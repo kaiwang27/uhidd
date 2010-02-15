@@ -330,7 +330,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
-	if (total > 0 && verbose) {
+	if (total > 0 && verbose > 1) {
 		PRINT1("hid coeds: ");
 		if (cnt == 0)
 			printf("none");

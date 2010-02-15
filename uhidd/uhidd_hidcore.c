@@ -497,7 +497,7 @@ hid_parser_init(struct hid_parser *hp)
 
 	}
 
-	if (verbose)
+	if (verbose > 1)
 		hid_parser_dump(hp);
 
 	/*
@@ -663,13 +663,11 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 
 	assert(hr->hr_id == 0 || hr->hr_id == *data);
 
-	if (verbose > 1)
-		printf("received data len(%d)\n", len);
 	if (verbose > 2) {
-		printf("received data: ");
+		printf("hid_appcol_recv_data: len(%d)", len);
 		for (i = 0; i < len; i++)
-			printf("0x%02x ", data[i]);
-		printf("\n");
+			printf(" 0x%02x", data[i]);
+		putchar('\n');
 	}
 
 	if (ha->ha_drv->ha_drv_recv_raw != NULL)
@@ -721,11 +719,11 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 				}
 			}
 		}
-		if (verbose > 1 && ((hf->hf_flags & HIO_CONST) == 0)) {
-			printf("data: (%s)\n", hf->hf_flags & HIO_VARIABLE ?
-			    "variable" : "array");
+		if (verbose > 3 && ((hf->hf_flags & HIO_CONST) == 0)) {
+			printf("extract data: (%s)\n", hf->hf_flags &
+			    HIO_VARIABLE ? "variable" : "array");
 			for (i = 0; i < hf->hf_count; i++) {
-				printf("  usage=%#x value=%d\n",
+				printf("\tusage=%#x value=%d\n",
 				    hf->hf_usage[i], hf->hf_value[i]);
 			}
 		}
@@ -773,6 +771,16 @@ hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 	total = (total + 7) / 8;
 
 	hid_parser_output_data(ha->ha_hp, hr->hr_id, buf, total);
+}
+
+void
+hid_appcol_xfer_raw_data(struct hid_appcol *ha, int report_id, char *buf,
+    int len)
+{
+
+	assert(ha != NULL);
+
+	hid_parser_output_data(ha->ha_hp, report_id, buf, len);
 }
 
 int

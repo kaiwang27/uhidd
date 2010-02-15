@@ -35,6 +35,7 @@ __FBSDID("$FreeBSD $");
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,9 +50,13 @@ __FBSDID("$FreeBSD $");
  */
 
 struct vhid_dev {
-	int hidctl_fd;
-	char *name;
+	int vd_fd;
+	int vd_rid;
+	char *vd_name;
+	pthread_t vd_task;
 };
+
+static void *vhid_task(void *arg);
 
 int
 vhid_match(struct hid_appcol *ha)
@@ -72,25 +77,25 @@ vhid_attach(struct hid_appcol *ha)
 {
 	struct hid_interface *hi;
 	struct hid_report *hr;
-	struct vhid_dev *hd;
+	struct vhid_dev *vd;
 	struct stat sb;
 	struct usb_gen_descriptor ugd;
-	int rid;
+	int e;
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 
-	if ((hd = calloc(1, sizeof(*hd))) == NULL) {
+	if ((vd = calloc(1, sizeof(*vd))) == NULL) {
 		syslog(LOG_ERR, "calloc failed in vhid_attach: %m");
 		return (-1);
 	}
 
-	hid_appcol_set_private(ha, hd);
+	hid_appcol_set_private(ha, vd);
 
 	/*
 	 * Open a new virtual hid device.
 	 */
-	if ((hd->hidctl_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
+	if ((vd->vd_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/uvhidctl: %m",
 		    basename(hi->dev), hi->ndx);
 		if (verbose && errno == ENOENT)
@@ -98,20 +103,22 @@ vhid_attach(struct hid_appcol *ha)
 		return (-1);
 	}
 
-	if (fstat(hd->hidctl_fd, &sb) < 0) {
+	if (fstat(vd->vd_fd, &sb) < 0) {
 		syslog(LOG_ERR, "%s[%d] fstat: /dev/uvhidctl: %m",
 		    basename(hi->dev), hi->ndx);
+		close(vd->vd_fd);
 		return (-1);
 	}
 
-	if ((hd->name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
+	if ((vd->vd_name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
 		syslog(LOG_ERR, "%s[%d] strdup failed: %m", basename(hi->dev),
 		    hi->ndx);
+		close(vd->vd_fd);
 		return (-1);
 	}
 
 	if (verbose)
-		PRINT1("hid device name: %s\n", devname(sb.st_rdev, S_IFCHR));
+		PRINT1("vhid device created: %s\n", devname(sb.st_rdev, S_IFCHR));
 
 	/*
 	 * Set the report descriptor of this virtual hid device.
@@ -120,7 +127,7 @@ vhid_attach(struct hid_appcol *ha)
 	ugd.ugd_data = ha->ha_rdesc;
 	ugd.ugd_actlen = ha->ha_rsz;
 
-	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
+	if (ioctl(vd->vd_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_DESC): %m",
 		    basename(hi->dev), hi->ndx);
 		return (-1);
@@ -133,15 +140,24 @@ vhid_attach(struct hid_appcol *ha)
 	 */
 
 	if (STAILQ_EMPTY(&ha->ha_hrlist))
-		rid = 0;
+		vd->vd_rid = 0;
 	else {
 		hr = STAILQ_FIRST(&ha->ha_hrlist);
-		rid = hr->hr_id;
+		vd->vd_rid = hr->hr_id;
 	}
 
-	if (ioctl(hd->hidctl_fd, USB_SET_REPORT_ID, &rid) < 0) {
+	if (ioctl(vd->vd_fd, USB_SET_REPORT_ID, &vd->vd_rid) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_ID): %m",
 		    basename(hi->dev), hi->ndx);
+		return (-1);
+	}
+
+	/* Create hidctl read task. */
+	e = pthread_create(&vd->vd_task, NULL, vhid_task, (void *) ha);
+	if (e) {
+		syslog(LOG_ERR, "%s[%d] pthread_create failed: %m",
+		    basename(hi->dev), hi->ndx);
+		close(vd->vd_fd);
 		return (-1);
 	}
 
@@ -152,16 +168,16 @@ void
 vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 {
 	struct hid_interface *hi;
-	struct vhid_dev *hd;
+	struct vhid_dev *vd;
 	int i;
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
-	hd = hid_appcol_get_private(ha);
-	assert(hd != NULL);
+	vd = hid_appcol_get_private(ha);
+	assert(vd != NULL);
 
-	if (verbose) {
-		PRINT1("%s received data:", hd->name);
+	if (verbose > 1) {
+		PRINT1("%s received data:", vd->vd_name);
 		for (i = 0; i < len; i++)
 			printf(" %u", buf[i]);
 		putchar('\n');
@@ -172,7 +188,47 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 		len--;
 	}
 
-	if (write(hd->hidctl_fd, buf, len) < 0)
+	if (write(vd->vd_fd, buf, len) < 0)
 		syslog(LOG_ERR, "%s[%d] write failed: %m", basename(hi->dev),
 		    hi->ndx);
+}
+
+static void *
+vhid_task(void *arg)
+{
+	struct hid_interface *hi;
+	struct hid_appcol *ha;
+	struct vhid_dev *vd;
+	char buf[4096];
+	int i, len;
+
+	ha = arg;
+	assert(ha != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
+	vd = hid_appcol_get_private(ha);
+	assert(vd != NULL);
+
+	for (;;) {
+		len = read(vd->vd_fd, buf, sizeof(buf));
+		if (len < 0) {
+			if (errno != EINTR)
+				break;
+			continue;
+		}
+		if (verbose) {
+			PRINT1("%s[%d] vhid_task recevied:", basename(hi->dev),
+			    hi->ndx);
+			for (i = 0; i < len; i++)
+				printf("%d ", buf[i]);
+			putchar('\n');
+		}
+		if (vd->vd_rid != 0 && vd->vd_rid == buf[0])
+			hid_appcol_xfer_raw_data(ha, vd->vd_rid, buf + 1,
+			    len - 1);
+		else
+			hid_appcol_xfer_raw_data(ha, vd->vd_rid, buf, len);
+	}
+
+	return (NULL);
 }
