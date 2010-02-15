@@ -78,7 +78,7 @@ main(int argc, char **argv)
 	struct libusb20_backend *backend;
 	char *pid_file;
 	pid_t otherpid;
-	int eval, opt;
+	int e, eval, opt;
 
 	eval = 0;
 
@@ -184,13 +184,23 @@ main(int argc, char **argv)
 	create_runtime_dir();
 
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp->hp_attached > 0)
-			pthread_create(&hi->thread, NULL, start_hid_interface,
-			    (void *)hi);
+		if (hi->hp->hp_attached > 0) {
+			e = pthread_create(&hi->thread, NULL,
+			    start_hid_interface, (void *)hi);
+			if (e) {
+				syslog(LOG_ERR, "pthread_create failed: %m");
+				goto uhidd_end;
+			}
+		}
 	}
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp->hp_attached > 0)
-			pthread_join(hi->thread, NULL);
+		if (hi->hp->hp_attached > 0) {
+			e = pthread_join(hi->thread, NULL);
+			if (e) {
+				syslog(LOG_ERR, "pthread_join failed: %m");
+				goto uhidd_end;
+			}
+		}
 	}
 
 uhidd_end:
@@ -455,7 +465,7 @@ start_hid_interface(void *arg)
 	assert(hi != NULL);
 
 	if (verbose)
-		PRINT1("HID parent started\n");
+		PRINT1("HID interface task started\n");
 
 	if (sscanf(hi->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
 		syslog(LOG_ERR, "%s not found", hi->dev);
@@ -669,7 +679,7 @@ static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: uhidd [-cdhkmouv] /dev/ugen%%u.%%u\n");
+	fprintf(stderr, "usage: uhidd [-c config_file] [-dhkmouv] "
+	    "/dev/ugen%%u.%%u\n");
 	exit(1);
 }
-

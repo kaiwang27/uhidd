@@ -9,10 +9,6 @@ default={
 	}
 }
 
-0x1234:0x5678:1={
-	kbd_attach="yes"
-}
-
 0x045e:0x00f9={
 	cc_keymap={
 		Help="0x68"

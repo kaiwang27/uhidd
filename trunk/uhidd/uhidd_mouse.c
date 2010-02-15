@@ -176,7 +176,7 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 	}
 
-	if (verbose)
+	if (verbose > 1)
 		PRINT1("mouse received data: dx(%d) dy(%d) dw(%d) btn(%#x)\n",
 		    dx, dy, dw, btn);
 
