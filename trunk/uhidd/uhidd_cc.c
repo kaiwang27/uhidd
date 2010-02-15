@@ -337,6 +337,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		for (i = 0; i < cnt; i++)
 			printf("0x%02X ", keycodes[i]);
 		putchar('\n');
-		kbd_input(ha, 0, keycodes, total);
 	}
+
+	kbd_input(ha, 0, keycodes, total);
 }
