@@ -641,13 +641,15 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 }
 #endif
 
+#define	_SET_REPORT_RETRY	3
+
 static int
 hid_set_report(void *context, int report_id, char *buf, int len)
 {
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_interface *hi;
 	uint16_t actlen;
-	int e, i;
+	int e, i, try;
 
 	hi = context;
 	assert(hi != NULL && hi->pdev != NULL);
@@ -659,7 +661,14 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	req.wValue = (0x02 << 8) | (report_id & 0xff); /* FIXME report type */
 	req.wIndex = hi->ndx;
 	req.wLength = len;
-	e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, len, 0);
+	try = 0;
+	do {
+		e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, len, 0);
+		if (e && verbose)
+			syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
+			    basename(hi->dev), hi->ndx);
+		try++;
+	} while (e && try < _SET_REPORT_RETRY);
 	if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
 		    basename(hi->dev), hi->ndx);
