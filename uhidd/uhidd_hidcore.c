@@ -124,6 +124,33 @@ hid_parser_set_write_callback(struct hid_parser *hp,
 	hp->hp_write_callback = write_callback;
 }
 
+void
+hid_parser_attach_drivers(struct hid_parser *hp)
+{
+	struct hid_appcol *ha;
+	struct hid_appcol_driver *hd, *mhd;
+	int i, match, old_match;
+
+	STAILQ_FOREACH(ha, &hp->halist, ha_next) {
+		mhd = NULL;
+		old_match = 0;
+		for (i = 0; i < hid_appcol_driver_num; i++) {
+			hd = &hid_appcol_driver_list[i];
+			match = hd->ha_drv_match(ha);
+			if (match != HID_MATCH_NONE) {
+				if (mhd == NULL || match > old_match) {
+					mhd = hd;
+					old_match= match;
+				}
+			}
+		}
+		if (mhd != NULL && mhd->ha_drv_attach(ha) == 0) {
+			ha->ha_drv = mhd;
+			hp->hp_attached++;
+		}
+	}
+}
+
 static struct hid_state *
 hid_new_state(void)
 {
@@ -266,10 +293,9 @@ hid_parser_init(struct hid_parser *hp)
 	struct hid_state *hs;
 	struct hid_appcol *ha;
 	struct hid_report *hr;
-	struct hid_appcol_driver *hd, *mhd;
 	unsigned char *b, *data, *ha_start;
 	unsigned int bTag, bType, bSize;
-	int dval, nusage, collevel, minset, i, match, old_match;
+	int dval, nusage, collevel, minset, i;
 	unsigned int usages[MAXUSAGE];
 
 #define	CHECK_REPORT_0							\
@@ -499,28 +525,6 @@ hid_parser_init(struct hid_parser *hp)
 
 	if (verbose > 1)
 		hid_parser_dump(hp);
-
-	/*
-	 * Attach drivers.
-	 */
-	STAILQ_FOREACH(ha, &hp->halist, ha_next) {
-		mhd = NULL;
-		old_match = 0;
-		for (i = 0; i < hid_appcol_driver_num; i++) {
-			hd = &hid_appcol_driver_list[i];
-			match = hd->ha_drv_match(ha);
-			if (match != HID_MATCH_NONE) {
-				if (mhd == NULL || match > old_match) {
-					mhd = hd;
-					old_match= match;
-				}
-			}
-		}
-		if (mhd != NULL && mhd->ha_drv_attach(ha) == 0) {
-			ha->ha_drv = mhd;
-			hp->hp_attached++;
-		}
-	}
 
 #undef CHECK_REPORT_0
 }
