@@ -663,7 +663,7 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	req.wLength = len;
 	try = 0;
 	do {
-		e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, len, 0);
+		e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, 0, 0);
 		if (e && verbose)
 			syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
 			    basename(hi->dev), hi->ndx);
