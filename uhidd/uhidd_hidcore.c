@@ -739,10 +739,16 @@ void
 hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
-	char buf[4096];
+	char buf[4096], *p;
 	int data, i, j, end, off, mask, pos, size, total;
 
 	total = 0;
+	p = buf;
+
+	if (hr->hr_id != 0) {
+		*p++ = hr->hr_id;
+		total += 8;
+	}
 
 	STAILQ_FOREACH(hf, &hr->hr_hflist[HID_OUTPUT], hf_next) {
 		for (i = 0; i < hf->hf_count; i++) {
@@ -763,7 +769,7 @@ hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 			off = pos / 8;
 			end = (pos + size) / 8 - off;
 			for (j = 0; j <= end; j++)
-				buf[off + j] = (buf[off + j] & (mask >> (j*8)))
+				p[off + j] = (p[off + j] & (mask >> (j*8)))
 				    | ((data >> (j*8)) & 0xff);
 		}
 		total += hf->hf_count * hf->hf_size;
