@@ -58,11 +58,11 @@ static struct pidfh *pfh = NULL;
 static STAILQ_HEAD(, hid_interface) hilist;
 
 static void	usage(void);
-static int	find_and_attach(struct libusb20_backend *backend,
-		    const char *dev);
-static int	attach_dev(const char *dev, struct libusb20_device *pdev);
-static void	attach_iface(const char *dev, struct libusb20_device *pdev,
+static int	find_device(const char *dev);
+static int	open_device(const char *dev, struct libusb20_device *pdev);
+static void	open_iface(const char *dev, struct libusb20_device *pdev,
 		    struct libusb20_interface *iface, int i);
+static int	alloc_hid_interface_be(struct hid_interface *hi);
 static void	*start_hid_interface(void *arg);
 static int	hid_set_report(void *context, int report_id, char *buf,
 		    int len);
@@ -75,7 +75,6 @@ int
 main(int argc, char **argv)
 {
 	struct hid_interface *hi;
-	struct libusb20_backend *backend;
 	char *pid_file;
 	pid_t otherpid;
 	int e, eval, opt;
@@ -162,21 +161,12 @@ main(int argc, char **argv)
 	/* Write pid file. */
 	pidfile_write(pfh);
 
-	backend = libusb20_be_alloc_default();
-	if (backend == NULL) {
-		syslog(LOG_ERR, "can not alloc backend");
-		eval = 1;
-		goto uhidd_end;
-	}
-
 	STAILQ_INIT(&hilist);
 
-	if (find_and_attach(backend, *argv) < 0) {
+	if (find_device(*argv) < 0) {
 		eval = 1;
 		goto uhidd_end;
 	}
-
-	libusb20_be_free(backend);
 
 	if (STAILQ_EMPTY(&hilist))
 		goto uhidd_end;
@@ -184,7 +174,20 @@ main(int argc, char **argv)
 	create_runtime_dir();
 
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp->hp_attached > 0) {
+		if (alloc_hid_interface_be(hi) < 0)
+			goto uhidd_end;
+		hi->hp = hid_parser_alloc(hi->rdesc, hi->rsz, hi);
+		if (hi->hp == NULL) {
+			syslog(LOG_ERR, "%s: hid_parser alloc failed",
+			    hi->dev);
+			continue;
+		}
+		hid_parser_set_write_callback(hi->hp, hid_set_report);
+		hid_parser_attach_drivers(hi->hp);
+	}
+
+	STAILQ_FOREACH(hi, &hilist, next) {
+		if (hi->hp && hi->hp->hp_attached > 0) {
 			e = pthread_create(&hi->thread, NULL,
 			    start_hid_interface, (void *)hi);
 			if (e) {
@@ -266,36 +269,46 @@ sighandler(int sig __unused)
 }
 
 static int
-find_and_attach(struct libusb20_backend *backend, const char *dev)
+find_device(const char *dev)
 {
+	struct libusb20_backend *backend;
 	struct libusb20_device *pdev;
 	unsigned int bus, addr;
+	int ret;
 
 	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
 		syslog(LOG_ERR, "%s not found", dev);
 		return (-1);
 	}
 
+	backend = libusb20_be_alloc_default();
+	if (backend == NULL) {
+		syslog(LOG_ERR, "can not alloc backend");
+		return (-1);
+	}
+
+	ret = 0;
 	pdev = NULL;
 	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
 		if (bus == libusb20_dev_get_bus_number(pdev) &&
 		    addr == libusb20_dev_get_address(pdev)) {
-			if (attach_dev(dev, pdev) < 0)
-				return (-1);
+			ret = open_device(dev, pdev);
 			break;
 		}
 	}
 
 	if (pdev == NULL) {
 		syslog(LOG_ERR, "%s not found", dev);
-		return (-1);
+		ret = -1;
 	}
 
-	return (0);
+	libusb20_be_free(backend);
+
+	return (ret);
 }
 
 static int
-attach_dev(const char *dev, struct libusb20_device *pdev)
+open_device(const char *dev, struct libusb20_device *pdev)
 {
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct libusb20_config *config;
@@ -328,7 +341,7 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
 			if (verbose)
 				PRINT0(dev, i, "HID interface\n");
-			attach_iface(dev, pdev, iface, i);
+			open_iface(dev, pdev, iface, i);
 		}
 	}
 
@@ -338,7 +351,7 @@ attach_dev(const char *dev, struct libusb20_device *pdev)
 }
 
 static void
-attach_iface(const char *dev, struct libusb20_device *pdev,
+open_iface(const char *dev, struct libusb20_device *pdev,
     struct libusb20_interface *iface, int ndx)
 {
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
@@ -442,20 +455,52 @@ attach_iface(const char *dev, struct libusb20_device *pdev,
 		return;
 	}
 
-	hi->hp = hid_parser_alloc(hi->rdesc, hi->rsz, hi);
-	hid_parser_set_write_callback(hi->hp, hid_set_report);
-
 	STAILQ_INSERT_TAIL(&hilist, hi, next);
+}
+
+static int
+alloc_hid_interface_be(struct hid_interface *hi)
+{
+	struct libusb20_backend *backend;
+	struct libusb20_device *pdev;
+	unsigned int bus, addr, e;
+
+	assert(hi != NULL);
+
+	if (sscanf(hi->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+		syslog(LOG_ERR, "%s not found", hi->dev);
+		return (-1);
+	}
+
+	backend = libusb20_be_alloc_default();
+	pdev = NULL;
+	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
+		if (bus == libusb20_dev_get_bus_number(pdev) &&
+		    addr == libusb20_dev_get_address(pdev)) {
+			e = libusb20_dev_open(pdev, 32);
+			if (e != 0) {
+				syslog(LOG_ERR, "%s: libusb20_dev_open failed",
+				    hi->dev);
+				return (-1);
+			}
+			break;
+		}
+	}
+	if (pdev == NULL) {
+		syslog(LOG_ERR, "%s not found", hi->dev);
+		return (-1);
+	}
+
+	hi->pdev = pdev;
+
+	return (0);
 }
 
 static void *
 start_hid_interface(void *arg)
 {
 	struct hid_interface *hi;
-	struct libusb20_backend *backend;
 	struct libusb20_transfer *xfer;
-	struct libusb20_device *pdev;
-	unsigned int bus, addr;
 	char buf[4096];
 	uint32_t actlen;
 	uint8_t x;
@@ -466,32 +511,6 @@ start_hid_interface(void *arg)
 
 	if (verbose)
 		PRINT1("HID interface task started\n");
-
-	if (sscanf(hi->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
-		syslog(LOG_ERR, "%s not found", hi->dev);
-		return (NULL);
-	}
-
-	backend = libusb20_be_alloc_default();
-	pdev = NULL;
-	while ((pdev = libusb20_be_device_foreach(backend, pdev)) != NULL) {
-		if (bus == libusb20_dev_get_bus_number(pdev) &&
-		    addr == libusb20_dev_get_address(pdev)) {
-			e = libusb20_dev_open(pdev, 32);
-			if (e != 0) {
-				syslog(LOG_ERR,
-				    "%s: libusb20_dev_open failed\n",
-				    hi->dev);
-				return (NULL);
-			}
-			break;
-		}
-	}
-	if (pdev == NULL) {
-		syslog(LOG_ERR, "%s not found", hi->dev);
-		return (NULL);
-	}
-	hi->pdev = pdev;
 
 	x = (hi->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	x |= 1;			/* IN transfer. */
@@ -653,6 +672,11 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 
 	hi = context;
 	assert(hi != NULL && hi->pdev != NULL);
+
+	printf("hid_set_report (%d)", len);
+	for (i = 0; i < len; i++)
+		printf(" 0x%02x", buf[i]);
+	putchar('\n');
 
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_OUT |

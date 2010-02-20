@@ -249,6 +249,7 @@ void		*hid_parser_get_private(struct hid_parser *);
 void		hid_parser_set_private(struct hid_parser *, void *);
 void		hid_parser_set_write_callback(struct hid_parser *,
 		    int (*)(void *, int, char *, int));
+void		hid_parser_attach_drivers(struct hid_parser *);
 unsigned int	hid_appcol_get_usage(struct hid_appcol *);
 void		hid_appcol_set_private(struct hid_appcol *, void *);
 void		*hid_appcol_get_private(struct hid_appcol *);
