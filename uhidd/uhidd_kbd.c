@@ -672,6 +672,11 @@ kbd_input(struct hid_appcol *ha, uint8_t mod, uint16_t *keycodes, int key_cnt)
 	for (i = 0; i < key_cnt; i++)
 		kd->ndata.keycode[i] = keycodes[i];
 	kd->key_cnt = key_cnt;
+	/*
+	 * Note that this call to kbd_process_keys is needed. If two adjacent
+	 * events are generated within 25ms, kbd_task may miss one of them.
+	 */
+	kbd_process_keys(kd);
 	KBD_UNLOCK;
 }
 
