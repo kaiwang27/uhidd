@@ -197,7 +197,7 @@ main(int argc, char **argv)
 		}
 	}
 	STAILQ_FOREACH(hi, &hilist, next) {
-		if (hi->hp->hp_attached > 0) {
+		if (hi->hp && hi->hp->hp_attached > 0) {
 			e = pthread_join(hi->thread, NULL);
 			if (e) {
 				syslog(LOG_ERR, "pthread_join failed: %m");
