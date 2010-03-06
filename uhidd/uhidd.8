@@ -81,7 +81,7 @@ in the configuration for a USB keyboard, The driver
 will create a in-memory keymap and assigned keycodes automatically
 when multimedia keys are pressed. This in-memory keymap will also
 be stored in
-.Em /var/run/uhidd.ugenX.Y/cc_keymap ,
+.Em /var/run/uhidd.ugen%u.%u/cc_keymap ,
 and can be copy-pasted into configuration file so the driver can
 load the keymap directly next time.
 .Pp
@@ -136,6 +136,20 @@ specified in the command line will increase the level of the
 verbosity. This option implies
 .Fl d .
 .El
+.Pp
+There are more options that can be configured through
+.Xr uhidd.conf 5 .
+.Sh FILES
+.Bl -tag -width /var/run/uhidd.ugen.%u.%u.pid/cc_keymap -compact
+.It Pa /usr/local/etc/uhidd.conf
+the default name of the configuration file
+.It Pa /var/run/uhidd.ugen.%u.%u.pid
+process id of the currently running
+.Nm
+daemon that attached to device ugen.%u.%u
+.It Pa /var/run/uhidd.ugen.%u.%u/cc_keymap
+the in-memory multimedia keymap for device ugen.%u.%u
+.El
 .Sh SEE ALSO
 .Xr usbhidaction 1 ,
 .Xr usb 3 ,
@@ -148,7 +162,7 @@ verbosity. This option implies
 .Xr moused 8
 .Pp
 There are additional instructions and setup examples in the web page:
-.Em http://wiki.freebsd.org/uhidd
+.Em http://wiki.FreeBSD.org/uhidd
 .Sh AUTHORS
 The
 .Nm
