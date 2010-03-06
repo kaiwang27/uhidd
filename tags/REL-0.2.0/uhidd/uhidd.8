@@ -1,0 +1,171 @@
+.\" Copyright (c) 2009, 2010 Kai Wang
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $FreeBSD$
+.\"
+.Dd March 6, 2010
+.Dt UHIDD 8
+.Os
+.Sh NAME
+.Nm uhidd
+.Nd USB HID daemon
+.Sh SYNOPSIS
+.Nm
+.Op Fl c Ar file
+.Op Fl dhkmosuVv
+.Ar /dev/ugen%u.%u
+.Sh DESCRIPTION
+The
+.Nm
+daemon handles USB HID devices like mouse, keyboard etc. in userland using
+the libusb20 library.
+.Pp
+The
+.Nm
+daemon is intended to handle USB HID devices with multiple logical
+devices sharing one endpoint, usually that is multiple application
+collections inside one interface. The daemon attaches interface driver
+to each HID interface of the ugen%u.%u device and attaches class
+drivers to application collections found inside that
+inteface. Interface driver receive data through the shared interrupt
+endpoint and pass it to the right class driver instance. The class
+driver then process the data as approriate.
+.Pp
+There are currently 4 HID class driver available: Mouse driver,
+Keyboard driver, Consumer Control driver and Virutal Generic HID
+driver.
+.Pp
+The Mouse driver extracts mouse input data from mouse application
+collection and pass the mouse event to the console driver to
+make it available to the text console and user programs.
+.Pp
+The Keyboard
+driver creates a
+.Xr vkbd 4
+virtual keyboard, extracts keyboard HID input report from keyboard
+application collection, translates the HID codes to key scancodes
+and passes the scancodes to the
+.Xr vkbd 4
+control device.
+.Pp
+The Consumer
+Control class driver is basically a special keyboard driver that
+handles multimedia keys found on USB keyboard. It translates
+consumer page usage
+.Pq USB multimedia keys
+to unassigned or rarely used keycodes. See
+.Xr uhidd.conf 5
+for how to configure the keymap. If a multimedia keymap is not found
+in the configuration for a USB keyboard, The driver
+will create a in-memory keymap and assigns keycodes automatically
+when multimedia keys are pressed. This in-memory keymap will also
+be stored in
+.Em /var/run/uhidd.ugen%u.%u/cc_keymap ,
+and can be copy-pasted into configuration file so the driver can
+load the keymap directly next time.
+.Pp
+All other HID application collections that don't
+have a specific driver can be attached by the Virtual Generic HID
+class driver. The driver creates a virtual USB HID device using
+the
+.Xr uvhid 4
+interface, so normal USB HID applications that deal with
+.Xr uhid 4
+could access the data through the virutal interface.
+.Sh OPTIONS
+The
+.Nm
+daemon supports the following options:
+.Bl -tag -width indent-two
+.It Fl c Ar file
+Specify the path to the configuration file. The default path
+is
+.Em /usr/local/etc/uhidd.conf .
+.It Fl d
+Do not detach from the controlling terminal, i.e., run in
+foreground. This option is intended for debugging the daemon.
+.It Fl h
+Attach Virtual Generic class driver.
+This option requires that uvhid(4) driver compiled in the kernel
+or loaded as a kernel module.
+.It Fl k
+Attach Keyboard class driver. The option requires that
+.Xr vkbd 4
+compiled in the kernel or loaded as a kernel module.
+.It Fl m
+Attach Mouse class driver.
+.It Fl o
+Attach Consumer Control class driver.
+.It Fl s
+Instruct the Virtual Generic HID driver to strip the report ID byte
+from the hid report data. This is needed if the hid application is
+using
+.Xr usbhid 3
+parser to parse the data read from the simulated
+.Xr uvhid 4
+interface.
+.It Fl V
+Output the version of
+.Nm
+daemon to stderr and exit.
+.It Fl v
+Output additional information for debugging purpose. Multiple
+.Fl v
+specified in the command line will increase the level of the
+verbosity. This option implies
+.Fl d .
+.El
+.Pp
+There are more options that can be configured through
+.Xr uhidd.conf 5 .
+.Sh FILES
+.Bl -tag -width /var/run/uhidd.ugen.%u.%u.pid/cc_keymap -compact
+.It Pa /usr/local/etc/uhidd.conf
+the default name of the configuration file
+.It Pa /var/run/uhidd.ugen.%u.%u.pid
+process id of the currently running
+.Nm
+daemon that attached to device ugen.%u.%u
+.It Pa /var/run/uhidd.ugen.%u.%u/cc_keymap
+the in-memory multimedia keymap for device ugen.%u.%u
+.El
+.Sh SEE ALSO
+.Xr usbhidaction 1 ,
+.Xr usb 3 ,
+.Xr usbhid 3 ,
+.Xr uhid 4 ,
+.Xr uvhid 4 ,
+.Xr vkbd 4 ,
+.Xr uhidd.conf 5 ,
+.Xr bthidd 8 ,
+.Xr moused 8
+.Pp
+There are additional instructions and setup examples in the web page:
+.Em http://wiki.FreeBSD.org/uhidd
+.Sh AUTHORS
+The
+.Nm
+daemon was written by
+.An Kai Wang Aq kaiw@FreeBSD.org ,
+based on the work done by many others.

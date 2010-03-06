@@ -1,0 +1,225 @@
+.\" Copyright (c) 2010 Kai Wang
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $FreeBSD$
+.\"
+.Dd March 3, 2010
+.Dt UHIDD.CONF 5
+.Os
+.Sh NAME
+.Nm uhidd.conf
+.Nd uhidd configuration file
+.Sh DESCRIPTION
+The
+.Nm
+configuration file is read at initial startup of the
+.Xr uhidd 8
+daemon to specify the configuration parameters for
+each class driver or the daemon itself.
+.Pp
+The configuration file consists of a list of options.
+options are assignemnts written in the form
+.Dq Ar name Ns Li = Ns Ar value .
+A option name can be a device identifier or a driver parameter.
+A value is either a quoted string or a list of sub options.
+The syntax of a option with a list of options as value
+is:
+.Pp
+.Bd -literal -offset indent
+name={
+	option
+	...
+	option
+}
+.Ed
+.Pp
+The following is a list of options supported:
+.Bl -tag -width indent-three
+.It Va device_identifier
+.Pq Vt list
+The device_identifier consists of vendor id, product id
+and the optional interface number. The option name is
+written in the format
+.Va vid:pid[:iface] .
+vid and pid are hexadecimals with prefix
+.Dq 0x ,
+while iface is a single decimal number (e.g. 0x045e:0x00f9:1).
+The value of this option is a list of sub options that apply
+to the specified device interface. If iface is omitted, sub options
+apply to all interfaces of the device. Also there is a special
+device identifier called
+.Va default .
+Sub options under
+.Va default
+apply to all the devices.
+.It Va kbd_attach
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+enable the keyboard class driver and attach it to the
+keyboard application collection.
+.It Va mouse_attach
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+enable the mouse class driver and attach it to the mouse
+application collection.
+.It Va vhid_attach
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+enable the virtual general HID driver and attach it to any
+application collection that doesn't have a specific driver.
+.It Va vhid_strip_id
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+instruct the vhid driver to strip the leading report id byte
+before passing the report to user.
+.It Va cc_attach
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+enable the consumer control class driver and attach it to the
+consumer control application collection. Consumer control
+driver provides general support for multimedia keys found
+in USB keyboard.
+.It Va cc_keymap
+.Pq Vt list
+This option specify the keymap for multimedia keys. The value
+is a list of sub options
+.Pq key bindings .
+Each sub option has
+the form
+.Dq Ar usage Ns Li = Ns Ar keycode
+and specify exact one key binding between a USB HID usage and a
+keycode. For example,
+.Em Mute Ns Li = Ns Dq Em 0x60
+will bind multimedia key
+.Em Mute
+to keycode 0x60. Normally, mapping usage to
+already assigned keycodes and causing conflicts is not desired.
+See
+.Sx FREEKEYS
+section below for a list of currently unused keycodes. Also refer
+to the
+.Em HID Usage Tables
+in the USB specification for a list of
+usage names.
+.El
+.Sh EXAMPLES
+.Bd -literal
+#
+# For all devices, attach mouse and consumer control driver but
+# do not attach keyboard and vhid driver. (say, keyboard is
+# handled by the kernel driver ukbd(4) instead). Provide a global
+# keymap which binds 4 multimedia keys found on most multimedia
+# USB keyboard.
+#
+default={
+	mouse_attach="YES"
+	kbd_attach="NO"
+	vhid_attach="NO"
+	cc_attach="YES"
+	cc_keymap={
+		Play/Pause="0x54"
+		Mute="0x60"
+		Volume_Increment="0x63"
+		Volume_Decrement="0x62"
+	}
+}
+
+#
+# Device specific config for Mircosoft Wireless Desktop 1000:
+# Bind additional multimedia keys found on this combo.
+#
+0x045e:0x009d={
+	cc_keymap={
+		Help="0x68"
+		Scan_Next_Track="0x5F"
+		Scan_Previous_Track="0x5A"
+		Play/Pause="0x54"
+		Mute="0x60"
+		Volume_Increment="0x63"
+		Volume_Decrement="0x62"
+		AL_Programmable_Button_Configuration="0x6F"
+		AL_Email_Reader="0x7F"
+		AL_Calculator="0x71"
+		AL_Logoff="0x72"
+		AL_Documents="0x64"
+		AL_Spell_Check="0x70"
+		AL_Image_Browser="0x7C"
+		AL_Audio_Browser="0x7A"
+		AC_New="0x6B"
+		AC_Open="0x6C"
+		AC_Close="0x6D"
+		AC_Save="0x7D"
+		AC_Print="0x79"
+		AC_Undo="0x69"
+		AC_Home="0x65"
+		AC_Back="0x66"
+		AC_Forward="0x67"
+		AC_Zoom_In="0x75"
+		AC_Zoom_Out="0x74"
+		AC_Redo/Repeat="0x6A"
+		AC_Reply="0x6E"
+		AC_Forward_Msg="0x76"
+		AC_Send="0x73"
+	}
+}
+.Ed
+.Sh FREEKEYS
+.Fx
+keyboard infrastructure support at most 127 keycodes. Most of the
+keycods have been assigned. Unassigned keycodes can be bound to
+multimedia keys without problem. Among those already assigned
+keycodes, rarely used ones can be reassigned to multimedia keys as
+well. The following is a list of keycods that can probably be
+.Dq Li safely
+reassigned.
+.Bl -tag -width "Rarely used keycodes"
+.It Unused keycodes
+Currently unused keycodes include: 0x54, 0x5A, 0x5F,
+0x60, 0x62, 0x63, 0x6F, 0x71, 0x72, 0x74.
+.It Rarely used keycodes
+0x73, 0x70, 0x7D, 0x79, 0x7B, 0x5C, 0xF2, 0xF1, 0x78, 0x77, 0x76.
+These keycodes are most likely not used for English keyboard.
+.It F13 - F24
+0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D,
+0x6E, 0x76. These keycodes are for extra function keys found on
+some keyboards and can be reassigned if your keyboard doesn't have
+them.
+.El
+.Sh FILES
+.Bl -tag -width /usr/local/etc/uhidd.conf -compact
+.It Pa /usr/local/etc/uhidd.conf
+the default name of the configuration file
+.El
+.Sh BUGS
+Some facts stated in this manual page might not be true.
+.Sh SEE ALSO
+.Xr uhidd 8
+.Pp
+HID Usage Tables:
+.Em http://www.usb.org/developers/devclass_docs/Hut1_11.pdf
