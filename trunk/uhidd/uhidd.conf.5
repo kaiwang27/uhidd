@@ -189,10 +189,35 @@ default={
 	}
 }
 .Ed
+.Sh FREEKEYS
+.Fx
+keyboard infrastructure support at most 127 keycodes. Most of the
+keycods have been assigned. Unassigned keycodes can be bound to
+multimedia keys without problem. Among those already assigned
+keycodes, rarely used ones can be reassigned to multimedia keys as
+well. The following is a list of keycods that can probably be
+.Dq Li safely
+reassigned.
+.Bl -tag -width "Rarely used keycodes"
+.It Unused keycodes
+Currently unused keycodes include: 0x54, 0x5A, 0x5F,
+0x60, 0x62, 0x63, 0x6F, 0x71, 0x72, 0x74.
+.It Rarely used keycodes
+0x73, 0x70, 0x7D, 0x79, 0x7B, 0x5C, 0xF2, 0xF1, 0x78, 0x77, 0x76.
+These keycodes are most likely not used for English keyboard.
+.It F13 - F24
+0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D,
+0x6E, 0x76. These keycodes are for extra function keys found on
+some keyboards and can be reassigned if your keyboard doesn't have
+them.
+.El
+.Ed
 .Sh FILES
 .Bl -tag -width /usr/local/etc/uhidd.conf -compact
 .It Pa /usr/local/etc/uhidd.conf
 the default name of the configuration file
 .El
+.Sh BUGS
+Some facts stated in this manual page might not be true.
 .Sh SEE ALSO
 .Xr uhidd 8
