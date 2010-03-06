@@ -35,8 +35,8 @@ The
 .Nm
 configuration file is read at initial startup of the
 .Xr uhidd 8
-daemon to specify the configuration parameters of
-each sub driver or the daemon itself.
+daemon to specify the configuration parameters for
+each class driver or the daemon itself.
 .Pp
 The configuration file consists of a list of options.
 options are assignemnts written in the form
@@ -58,9 +58,9 @@ The following is a list of options supported:
 .Bl -tag -width indent-three
 .It Va device_identifier
 .Pq Vt list
-The device_identifier consist of vendor id, product id
+The device_identifier consists of vendor id, product id
 and the optional interface number. The option name is
-written as
+written in the format
 .Va vid:pid[:iface] .
 vid and pid are hexadecimals with prefix
 .Dq 0x ,
@@ -69,7 +69,7 @@ The value of this option is a list of sub options that apply
 to the specified device interface. If iface is omitted, sub options
 apply to all interfaces of the device. Also there is a special
 device identifier called
-.Va default :
+.Va default .
 Sub options under
 .Va default
 apply to all the devices.
@@ -77,19 +77,19 @@ apply to all the devices.
 .Pq Vt bool
 If set to
 .Dq Li YES ,
-enable the keyboard driver and attach it to the
-keyboard apolication collection.
+enable the keyboard class driver and attach it to the
+keyboard application collection.
 .It Va mouse_attach
 .Pq Vt bool
 If set to
 .Dq Li YES ,
-enable the mouse driver and attach it to the mouse
+enable the mouse class driver and attach it to the mouse
 application collection.
 .It Va vhid_attach
 .Pq Vt bool
 If set to
 .Dq Li YES ,
-enable the virtual general hid driver and attach it to any
+enable the virtual general HID driver and attach it to any
 application collection that doesn't have a specific driver.
 .It Va vhid_strip_id
 .Pq Vt bool
@@ -101,7 +101,7 @@ before passing the report to user.
 .Pq Vt bool
 If set to
 .Dq Li YES ,
-enable the consumer control driver and attach it to the
+enable the consumer control class driver and attach it to the
 consumer control application collection. Consumer control
 driver provides general support for multimedia keys found
 in USB keyboard.
