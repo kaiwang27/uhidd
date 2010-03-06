@@ -45,63 +45,82 @@ The
 .Nm
 daemon is intended to handle USB HID devices with multiple logical
 devices sharing one endpoint, usually that is multiple application
-collections inside one interface. The daemon attaches each HID
-interface of the ugen%u.%u device as a HID parent device, and the
-application collections inside that inteface as the HID child
-devices. HID parent devices receive data through the shared interrupt
-endpoint and pass it to the right HID child device.  The child device
-then process the data as approriate.
+collections inside one interface. The daemon attaches interface driver
+to each HID interface of the ugen%u.%u device and attaches class
+drivers to application collections found inside that
+inteface. Interface driver receive data through the shared interrupt
+endpoint and pass it to the right class driver instance. The class
+driver then process the data as approriate.
 .Pp
-There are currently 3 kinds of HID child devices: Mouse device, Keyboard
-device, and Generic HID device. The Mouse child device pass the mouse
-data to the console driver to make it available to the text console
-and user programs. The Keyboard child device create a
+There are currently 4 HID class driver available: Mouse driver,
+Keyboard driver, Consumer Control driver and Virutal Generic HID
+driver.
+.Pp
+The Mouse driver extract mouse input data from mouse application
+clooection and pass the mouse event to the console driver to
+make it available to the text console and user programs.
+.Pp
+The Keyboard
+driver create a
 .Xr vkbd 4
-virtual keyboard and pass the keyboard scancodes to it.
-All other HID devices fall into the category of Generic HID device.
-The Generic HID child device creates a virtual USB HID device using
+virtual keyboard, extract keyboard HID input report from keyboard
+application collection, translate the HID codes to key scancodes
+and pass the scancodes to the
+.Xr vkbd 4
+control device.
+.Pp
+The Consumer
+Control class driver is basically a special keyboard driver that
+handles multimedia keys found on USB keyboard. It translates
+consumer page usage
+.Pq USB multimedia keys
+to unassigned or rarely used keycodes. See
+.Xr uhidd.conf 5
+for how to configure the keymap. If a multimedia keymap is not found
+in the configuration for a USB keyboard, The driver
+will create a in-memory keymap and assigned keycodes automatically
+when multimedia keys are pressed. This in-memory keymap will also
+be stored in
+.Em /var/run/uhidd.ugenX.Y/cc_keymap ,
+and can be copy-pasted into configuration file so the driver can
+load the keymap directly next time.
+.Pp
+All other HID application collections that doesn't
+have a specific driver can be attached by the Virtual Generic HID
+class driver. The driver creates a virtual USB HID device using
 the
 .Xr uvhid 4
-driver, so normal usb hid applications that deal with
+interface, so normal USB HID applications that deal with
 .Xr uhid 4
-could access the data through the virutal device.
+could access the data through the virutal interface.
 .Sh OPTIONS
 The
 .Nm
 daemon supports the following options:
-.Bl -tag -width indent
+.Bl -tag -width indent-two
 .It Fl c Ar file
 Specify the path to the configuration file. The default path
-is /usr/local/etc/uhidd.conf
+is
+.Em /usr/local/etc/uhidd.conf .
 .It Fl d
 Do not detach from the controlling terminal, i.e., run in
 foreground. This option is intended for debugging the daemon.
 .It Fl h
-Attach Generic HID child device.
+Attach Virtual Generic class driver.
 This option requires that uvhid(4) driver compiled in the kernel
 or loaded as a kernel module.
 .It Fl k
-Attach Keyboard HID child device. The option requires that
+Attach Keyboard class driver. The option requires that
 .Xr vkbd 4
 compiled in the kernel or loaded as a kernel module.
-.It Fl K
-Attach Keyboard as a Generic HID child device. If this options
-is spcified, keyboard child device will apprear as a
-.Xr uvhid 4
-device instead of a
-.Xr vkbd 4
-device. This option implies
-.Fl k .
 .It Fl m
-Attach Mouse HID child device.
-.It Fl M
-Attach Mouse as a Generic HID child device. This option impiles
-.Fl m .
+Attach Mouse class driver.
 .It Fl o
-Attach Consumer Control child device.
+Attach Consumer Control class driver.
 .It Fl s
-Strip the report ID byte from the hid report data for the Generic
-HID child device. This is needed if the hid application is using
+Instruct the Virtual Generic HID driver to strip the report ID byte
+from the hid report data. This is needed if the hid application is
+using
 .Xr usbhid 3
 parser to parse the data read from the simulated
 .Xr uvhid 4
@@ -120,8 +139,12 @@ verbosity. This option implies
 .Xr uhid 4 ,
 .Xr uvhid 4 ,
 .Xr vkbd 4 ,
+.Xr uhidd.conf 5 ,
 .Xr bthidd 8 ,
 .Xr moused 8
+.Pp
+There are additional instructions and setup examples in the web page:
+.Em http://wiki.freebsd.org/uhidd
 .Sh AUTHORS
 The
 .Nm
