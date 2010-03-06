@@ -58,6 +58,7 @@ static struct pidfh *pfh = NULL;
 static STAILQ_HEAD(, hid_interface) hilist;
 
 static void	usage(void);
+static void	version(void);
 static int	find_device(const char *dev);
 static int	open_device(const char *dev, struct libusb20_device *pdev);
 static void	open_iface(const char *dev, struct libusb20_device *pdev,
@@ -81,11 +82,7 @@ main(int argc, char **argv)
 
 	eval = 0;
 
-	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
-
-	config_init();
-
-	while ((opt = getopt(argc, argv, "c:dhkKmMosuv")) != -1) {
+	while ((opt = getopt(argc, argv, "c:dhkmosuVv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -115,6 +112,8 @@ main(int argc, char **argv)
 			detach = 0;
 			verbose++;
 			break;
+		case 'V':
+			version();
 		default:
 			usage();
 		}
@@ -125,6 +124,10 @@ main(int argc, char **argv)
 
 	if (*argv == NULL)
 		usage();
+
+	openlog("uhidd", LOG_PID|LOG_PERROR|LOG_NDELAY, LOG_USER);
+
+	config_init();
 
 	/* Check that another uhidd isn't already attached to the device. */
 	if (asprintf(&pid_file, "/var/run/uhidd.%s.pid", basename(*argv)) < 0) {
@@ -715,4 +718,12 @@ usage(void)
 	fprintf(stderr, "usage: uhidd [-c config_file] [-dhkmouv] "
 	    "/dev/ugen%%u.%%u\n");
 	exit(1);
+}
+
+static void
+version(void)
+{
+
+	fprintf(stderr, "uhidd 0.2.0\n");
+	exit(0);
 }
