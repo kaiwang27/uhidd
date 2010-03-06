@@ -33,7 +33,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl c Ar file
-.Op Fl dhkKmMosuv
+.Op Fl dhkmosuVv
 .Ar /dev/ugen%u.%u
 .Sh DESCRIPTION
 The
@@ -125,6 +125,10 @@ using
 parser to parse the data read from the simulated
 .Xr uvhid 4
 interface.
+.It Fl V
+Output the version of
+.Nm
+daemon to stderr and exit.
 .It Fl v
 Output additional information for debugging purpose. Multiple
 .Fl v
