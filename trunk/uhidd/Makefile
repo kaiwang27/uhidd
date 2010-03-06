@@ -5,7 +5,7 @@ SRCS=	uhidd.c uhidd_vhid.c uhidd_hidcore.c uhidd_hidump.c uhidd_kbd.c  \
 
 GENSRCS=	usage_in_page.c usage_page.c
 CLEANFILES=	${GENSRCS}
-MAN=		uhidd.8
+MAN=		uhidd.conf.5 uhidd.8
 
 WARNS?=	6
 
