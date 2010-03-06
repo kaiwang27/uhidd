@@ -56,16 +56,16 @@ There are currently 4 HID class driver available: Mouse driver,
 Keyboard driver, Consumer Control driver and Virutal Generic HID
 driver.
 .Pp
-The Mouse driver extract mouse input data from mouse application
-clooection and pass the mouse event to the console driver to
+The Mouse driver extracts mouse input data from mouse application
+collection and pass the mouse event to the console driver to
 make it available to the text console and user programs.
 .Pp
 The Keyboard
-driver create a
+driver creates a
 .Xr vkbd 4
-virtual keyboard, extract keyboard HID input report from keyboard
-application collection, translate the HID codes to key scancodes
-and pass the scancodes to the
+virtual keyboard, extracts keyboard HID input report from keyboard
+application collection, translates the HID codes to key scancodes
+and passes the scancodes to the
 .Xr vkbd 4
 control device.
 .Pp
@@ -78,14 +78,14 @@ to unassigned or rarely used keycodes. See
 .Xr uhidd.conf 5
 for how to configure the keymap. If a multimedia keymap is not found
 in the configuration for a USB keyboard, The driver
-will create a in-memory keymap and assigned keycodes automatically
+will create a in-memory keymap and assigns keycodes automatically
 when multimedia keys are pressed. This in-memory keymap will also
 be stored in
 .Em /var/run/uhidd.ugen%u.%u/cc_keymap ,
 and can be copy-pasted into configuration file so the driver can
 load the keymap directly next time.
 .Pp
-All other HID application collections that doesn't
+All other HID application collections that don't
 have a specific driver can be attached by the Virtual Generic HID
 class driver. The driver creates a virtual USB HID device using
 the
