@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <assert.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 #include "uhidd.h"
@@ -293,6 +294,84 @@ cc_attach(struct hid_appcol *ha)
 
 #define MAX_KEYCODE 256
 
+static void
+cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
+{
+	struct hid_interface *hi;
+	struct hid_field *hf;
+	struct timeval tv;
+	double elapsed;
+	unsigned int up;
+	int i, flags, total;
+	uint16_t keycodes[MAX_KEYCODE];
+	uint16_t key;
+
+	/*
+	 * HUG_VOLUME has Usage Type LC (linear control). Usually it has
+	 * value range [-Min, Max]. Positive value n increments the volume
+	 * by n. Negative value -n decrements the volumn by n. To fit in
+	 * our key press/release model, HUG_VOLUME is simulated by
+	 * pressing/releasing HUG_VOLUME_UP or HUG_VLOLUME_DOWN n times.
+	 */
+
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
+
+	/* Do nothing if value is 0. */
+	if (value == 0)
+		return;
+
+	/* Volume event is processed at most once every 200ms. */
+	if (gettimeofday(&tv, NULL) < 0) {
+		syslog(LOG_ERR, "%s[%d] gettimeofday failed: %m",
+		    basename(hi->dev), hi->ndx);
+		return;
+	}
+	elapsed = (tv.tv_sec - hi->cc_volume_tv.tv_sec) * 1000.0;
+	elapsed += (tv.tv_usec - hi->cc_volume_tv.tv_usec) / 1000.0;
+	if (elapsed < 200.0)
+		return;
+	memcpy(&hi->cc_volume_tv, &tv, sizeof(struct timeval));
+
+	/* The keyboard driver needs to know the total number of keys. */
+	total = 0;
+	hf = NULL;
+	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
+		flags = hid_field_get_flags(hf);
+		if (flags & HIO_CONST)
+			continue;
+		for (i = 0; i < hf->hf_count; i++) {
+			up = hid_field_get_usage_page(hf);
+			if (up != HUP_CONSUMER)
+				continue;
+			total++;
+		}
+	}
+	if (total >= MAX_KEYCODE)
+		return;
+
+	if (value < 0)
+		key = HUG_VOLUME_DOWN;
+	else
+		key = HUG_VOLUME_UP;
+	value = abs(value);
+
+	memset(keycodes, 0, sizeof(keycodes));
+	for (i = 0; i < value; i++) {
+		/* Key press. */
+		keycodes[0] = key;
+		kbd_input(ha, 0, keycodes, total);
+		if (verbose > 1)
+			PRINT1("hid codes: 0x%02X (HUG_VOLUME)\n",
+			    keycodes[0]);
+		/* Key release. */
+		keycodes[0] = 0;
+		kbd_input(ha, 0, keycodes, total);
+		if (verbose > 1)
+			PRINT1("hid codes: none (HUG_VOLUME)\n");
+	}
+}
+
 void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
@@ -322,6 +401,10 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 			if (total >= MAX_KEYCODE)
 				continue;
 			total++;
+			if (HID_USAGE(usage) == HUG_VOLUME && value) {
+				cc_process_volume_usage(ha, hr, value);
+				continue;
+			}
 			if (value) {
 				if (cnt >= MAX_KEYCODE)
 					continue;
