@@ -299,8 +299,6 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
-	struct timeval tv;
-	double elapsed;
 	unsigned int up;
 	int i, flags, total;
 	uint16_t keycodes[MAX_KEYCODE];
@@ -320,18 +318,6 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 	/* Do nothing if value is 0. */
 	if (value == 0)
 		return;
-
-	/* Volume event is processed at most once every 200ms. */
-	if (gettimeofday(&tv, NULL) < 0) {
-		syslog(LOG_ERR, "%s[%d] gettimeofday failed: %m",
-		    basename(hi->dev), hi->ndx);
-		return;
-	}
-	elapsed = (tv.tv_sec - hi->cc_volume_tv.tv_sec) * 1000.0;
-	elapsed += (tv.tv_usec - hi->cc_volume_tv.tv_usec) / 1000.0;
-	if (elapsed < 200.0)
-		return;
-	memcpy(&hi->cc_volume_tv, &tv, sizeof(struct timeval));
 
 	/* The keyboard driver needs to know the total number of keys. */
 	total = 0;

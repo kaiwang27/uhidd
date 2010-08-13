@@ -27,7 +27,6 @@
  */
 
 #include <sys/queue.h>
-#include <sys/time.h>
 #include <libgen.h>
 
 /*
@@ -188,7 +187,6 @@ struct hid_interface {
 	int				 pkt_sz;
 	uint8_t				 cc_keymap[_MAX_MM_KEY];
 	int				 free_key_pos;
-	struct timeval			 cc_volume_tv;
 	pthread_t			 thread;
 	STAILQ_ENTRY(hid_interface)	 next;
 };
