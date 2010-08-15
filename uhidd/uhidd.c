@@ -365,15 +365,6 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	int desc, ds, e, j, pos, size;
 	uint16_t actlen;
 
-#if 0
-	/* XXX ioctl currently unimplemented */
-	if (libusb20_dev_kernel_driver_active(pdev, ndx)) {
-		printf("%s: iface(%d) kernel driver is active\n", dev, ndx);
-		/* TODO probably detach the kernel driver here. */
-	} else
-		printf("%s: iface(%d) kernel driver is not active\n", dev, ndx);
-#endif
-
 	/*
 	 * Get report descriptor.
 	 */
@@ -432,6 +423,30 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	ddesc = libusb20_dev_get_device_desc(pdev);
 	hi->vendor_id = ddesc->idVendor;
 	hi->product_id = ddesc->idProduct;
+
+#if 0
+	/*
+	 * Check if any kernel driver is attached to this device.
+	 */
+	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
+		PRINT1("Kernel driver is active\n");
+		if (config_detach_kernel_driver(hi)) {
+			if (libusb20_dev_detach_kernel_driver(pdev, ndx) != 0) {
+				PRINT1("Unable to detach kernel driver: "
+				    "libusb20_dev_detach_kernel_driver "
+				    "failed\n");
+				free(hi);
+				return;
+			} else
+				PRINT1("kernel driver detached!\n");
+		} else {
+			PRINT1("Abort attach since kernel driver is active\n");
+			free(hi);
+			return;
+		}
+	} else
+		PRINT1("Kernel driver is not active");
+#endif
 
 	/*
 	 * Find the input interrupt endpoint.

@@ -288,6 +288,7 @@ int		config_cc_attach(struct hid_interface *);
 void		config_init(void);
 int		config_read_file(void);
 int		config_vhid_strip_id(struct hid_interface *);
+int		config_detach_kernel_driver(struct hid_interface *);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);

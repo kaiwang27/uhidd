@@ -343,3 +343,17 @@ config_vhid_strip_id(struct hid_interface *hi)
 
 	return (uconfig.gconfig.vhid_strip_id);
 }
+
+int
+config_detach_kernel_driver(struct hid_interface *hi)
+{
+	struct device_config *dc;
+
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
+	if (dc != NULL && dc->detach_kernel_driver)
+		return (dc->detach_kernel_driver);
+	if (clconfig.detach_kernel_driver)
+		return (clconfig.detach_kernel_driver);
+
+	return (uconfig.gconfig.detach_kernel_driver);
+}
