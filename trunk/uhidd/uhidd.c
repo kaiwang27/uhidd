@@ -424,9 +424,8 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	hi->vendor_id = ddesc->idVendor;
 	hi->product_id = ddesc->idProduct;
 
-#if 0
 	/*
-	 * Check if any kernel driver is attached to this device.
+	 * Check if any kernel driver is attached to this interface.
 	 */
 	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
 		PRINT1("Kernel driver is active\n");
@@ -445,8 +444,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 			return;
 		}
 	} else
-		PRINT1("Kernel driver is not active");
-#endif
+		PRINT1("Kernel driver is not active\n");
 
 	/*
 	 * Find the input interrupt endpoint.
