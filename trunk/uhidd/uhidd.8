@@ -107,7 +107,9 @@ Do not detach from the controlling terminal, i.e., run in
 foreground. This option is intended for debugging the daemon.
 .It Fl h
 Attach Virtual Generic class driver.
-This option requires that uvhid(4) driver compiled in the kernel
+This option requires that
+.Xr uvhid 4
+driver compiled in the kernel
 or loaded as a kernel module.
 .It Fl k
 Attach Keyboard class driver. The option requires that
@@ -125,6 +127,14 @@ using
 parser to parse the data read from the simulated
 .Xr uvhid 4
 interface.
+.It Fl u
+When this options is specified, if there is already an active kernel
+driver attached to the device interface,
+.Nm uhidd
+daemon will try to detach the active kernel driver first, before
+attaching the interface.
+This option is easpecially useful when there is no easy way to
+unload the kernel USB HID device drivers.
 .It Fl V
 Output the version of
 .Nm
