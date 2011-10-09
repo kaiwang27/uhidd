@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 int verbose = 0;
 
 static int detach = 1;
+static int hidump = 0;
 static struct pidfh *pfh = NULL;
 static STAILQ_HEAD(, hid_interface) hilist;
 
@@ -82,12 +83,16 @@ main(int argc, char **argv)
 
 	eval = 0;
 
-	while ((opt = getopt(argc, argv, "c:dhkmosuVv")) != -1) {
+	while ((opt = getopt(argc, argv, "c:dDhkmosuVv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
 			break;
 		case 'd':
+			detach = 0;
+			break;
+		case 'D':
+			hidump = 1;
 			detach = 0;
 			break;
 		case 'h':
@@ -403,6 +408,14 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 		syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
 		    " failed", basename(dev), ndx);
 		return;
+	}
+
+	/*
+	 * Dump HID report descriptor in human readable form, if requested.
+	 */
+	if (hidump) {
+		PRINT0(dev, ndx, "Report descriptor dump:\n");
+		dump_report_desc(rdesc, actlen);
 	}
 
 	/*
