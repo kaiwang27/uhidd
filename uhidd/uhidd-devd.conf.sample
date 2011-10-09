@@ -1,4 +1,6 @@
-attach 0 {
-	match "device-name" "ugen[0-9]+.[0-9]+";
-	action "/usr/local/etc/rc.d/uhidd start /dev/$device-name";
+notify 0 {
+	match "subsystem" "DEVICE";
+	match "type" "ATTACH";
+	match "cdev" "ugen[0-9]+.[0-9]+";
+	action "/usr/local/etc/rc.d/uhidd start /dev/$cdev";
 };
