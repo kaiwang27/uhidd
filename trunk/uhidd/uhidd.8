@@ -33,7 +33,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl c Ar file
-.Op Fl dhkmosuVv
+.Op Fl DdhkmosuVv
 .Ar /dev/ugen%u.%u
 .Sh DESCRIPTION
 The
@@ -102,6 +102,10 @@ daemon supports the following options:
 Specify the path to the configuration file. The default path
 is
 .Em /usr/local/etc/uhidd.conf .
+.It Fl D
+Dump HID device report descriptor in human readable form.
+This option implies
+.Fl d .
 .It Fl d
 Do not detach from the controlling terminal, i.e., run in
 foreground. This option is intended for debugging the daemon.
