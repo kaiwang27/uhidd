@@ -1,6 +1,6 @@
 %{
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,7 @@ vhid_attach		{ return (T_VHID_ATTACH); }
 vhid_strip_id		{ return (T_VHID_STRIP_REPORT_ID); }
 cc_attach		{ return (T_CC_ATTACH); }
 cc_keymap		{ return (T_CC_KEYMAP); }
+hidaction		{ return (T_HIDACTION); }
 
 0x[0-9a-fA-F]+		{
 				yylval.val = strtoul(yytext, NULL, 16);

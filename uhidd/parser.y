@@ -1,6 +1,6 @@
 %{
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,14 +61,17 @@ static struct device_config dconfig, *dconfig_p;
 %token T_VHID_STRIP_REPORT_ID
 %token T_CC_ATTACH
 %token T_CC_KEYMAP
+%token T_HIDACTION
 %token <val> T_NUM
 %token <val> T_HEX
 %token <str> T_USAGE
 %token <str> T_STRING
+%type <hac> hidaction_entry
 
 %union {
 	char *str;
 	int val;
+	struct hidaction_config *hac;
 }
 
 %%
@@ -98,6 +101,7 @@ default_conf
 		memcpy(&uconfig.gconfig, &dconfig,
 		    sizeof(struct device_config));
 		memset(&dconfig, 0 ,sizeof(struct device_config));
+		STAILQ_INIT(&dconfig.haclist);
 	}
 	;
 
@@ -109,6 +113,7 @@ device_conf
 		memcpy(dconfig_p, &dconfig, sizeof(struct device_config));
 		STAILQ_INSERT_TAIL(&uconfig.dclist, dconfig_p, next);
 		memset(&dconfig, 0 ,sizeof(struct device_config));
+		STAILQ_INIT(&dconfig.haclist);
 	}
 	;
 
@@ -137,6 +142,7 @@ conf_entry
 	| cc_keymap
 	| vhid_attach
 	| vhid_strip_id
+	| hidaction
 	;
 
 mouse_attach
@@ -200,6 +206,40 @@ vhid_strip_id
 		dconfig.vhid_strip_id = -1;
 	}
 
+hidaction
+	: T_HIDACTION "=" "{" hidaction_entry_list "}"
+	;
+
+hidaction_entry_list
+	: hidaction_entry
+	| hidaction_entry_list hidaction_entry
+	;
+
+hidaction_entry
+	: T_STRING T_NUM T_NUM T_STRING {
+		$$ = calloc(1, sizeof(struct hidaction_config));
+		if ($$ == NULL)
+			err(1, "calloc");
+		$$->usage = $1;
+		$$->anyvalue = 0;
+		$$->value = $2;
+		$$->debounce = $3;
+		$$->action = $4;
+		STAILQ_INSERT_TAIL(&dconfig.haclist, $$, next);
+	}
+	| T_STRING '*' T_NUM T_STRING {
+		$$ = calloc(1, sizeof(struct hidaction_config));
+		if ($$ == NULL)
+			err(1, "calloc");
+		$$->usage = $1;
+		$$->anyvalue = 1;
+		$$->value = 0;
+		$$->debounce = $3;
+		$$->action = $4;
+		STAILQ_INSERT_TAIL(&dconfig.haclist, $$, next);
+	}
+	;
+
 %%
 
 /* ARGSUSED */
@@ -237,6 +277,7 @@ config_init(void)
 {
 
 	STAILQ_INIT(&uconfig.dclist);
+	STAILQ_INIT(&dconfig.haclist);
 }
 
 int
