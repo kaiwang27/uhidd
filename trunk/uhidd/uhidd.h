@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,6 +91,7 @@ struct hid_field {
 	int hf_usage_max;
 	int hf_logic_min;
 	int hf_logic_max;
+	int hf_nusage_count;
 	unsigned int hf_nusage[MAXUSAGE];
 	unsigned int *hf_usage;
 	int *hf_value;
@@ -104,6 +105,30 @@ struct hid_report {
 	STAILQ_ENTRY(hid_report) hr_next;
 };
 
+/*
+ * HID action related structures.
+ */
+struct hidaction_config {
+	char *usage;
+	int value;
+	int anyvalue;
+	int debounce;
+	int lastseen;
+	int lastused;
+	char *action;
+	STAILQ_ENTRY(hidaction_config) next;
+};
+
+struct hidaction {
+	struct hidaction_config *conf;
+	struct hid_report *hr;
+	struct hid_field *hf;
+	unsigned int usage;
+	int lastseen;
+	int lastused;
+	STAILQ_ENTRY(hidaction) next;
+};
+
 /* HID application collection. */
 struct hid_appcol {
 	unsigned int ha_usage;
@@ -113,6 +138,7 @@ struct hid_appcol {
 	unsigned char ha_rdesc[_MAX_RDESC_SIZE];
 	int ha_rsz;
 	STAILQ_HEAD(, hid_report) ha_hrlist;
+	STAILQ_HEAD(, hidaction) ha_haclist;
 	STAILQ_ENTRY(hid_appcol) ha_next;
 };
 
@@ -155,6 +181,7 @@ struct device_config {
 	uint8_t cc_keymap[_MAX_MM_KEY];
 	int detach_kernel_driver;
 	int vhid_strip_id;
+	STAILQ_HEAD(, hidaction_config) haclist;
 	STAILQ_ENTRY(device_config) next;
 };
 
@@ -289,6 +316,8 @@ void		config_init(void);
 int		config_read_file(void);
 int		config_vhid_strip_id(struct hid_interface *);
 int		config_detach_kernel_driver(struct hid_interface *);
+void		find_hidaction(struct hid_appcol *);
+void		run_hidaction(struct hid_appcol *, struct hid_report *);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);

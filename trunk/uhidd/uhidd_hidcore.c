@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  * Copyright (c) 1999, 2001 Lennart Augustsson <augustss@netbsd.org>
  * All rights reserved.
@@ -198,6 +198,7 @@ hid_add_appcol(struct hid_parser *hp, unsigned int usage)
 	ha->ha_hp = hp;
 	ha->ha_usage = usage;
 	STAILQ_INIT(&ha->ha_hrlist);
+	STAILQ_INIT(&ha->ha_haclist);
 	STAILQ_INSERT_TAIL(&hp->halist, ha, ha_next);
 
 	return (ha);
@@ -211,6 +212,12 @@ hid_end_appcol(struct hid_appcol *ha, unsigned char *ha_start,
 	assert(ha != NULL && ha_start != NULL && ha_end != NULL);
 	ha->ha_rsz = ha_end - ha_start;
 	memcpy(ha->ha_rdesc, ha_start, ha->ha_rsz);
+
+	/* 
+	 * Check if this appcol contains fields that matches a
+	 * hidaction rule.
+	 */
+	find_hidaction(ha);
 }
 
 static struct hid_report *
@@ -281,6 +288,7 @@ hid_add_field(struct hid_report *hr, struct hid_state *hs, enum hid_kind kind,
 		if (hf->hf_flags & HIO_VARIABLE)
 			hf->hf_usage[i] = hf->hf_nusage[i];
 	}
+	hf->hf_nusage_count = nusage;
 	hf->hf_usage_min = hs->usage_minimum;
 	hf->hf_usage_max = hs->usage_maximum;
 
@@ -732,6 +740,12 @@ hid_appcol_recv_data(struct hid_appcol *ha, struct hid_report *hr, uint8_t *data
 			}
 		}
 	}
+
+	/*
+	 * Run an action if there is a hidaction rule match this report.
+	 */
+	if (!STAILQ_EMPTY(&ha->ha_haclist))
+		run_hidaction(ha, hr);
 
 	/*
 	 * Pass data to driver recv method.
