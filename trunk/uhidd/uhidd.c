@@ -318,7 +318,6 @@ find_device(const char *dev)
 static int
 open_device(const char *dev, struct libusb20_device *pdev)
 {
-	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct libusb20_config *config;
 	struct libusb20_interface *iface;
 	int cndx, e, i;
@@ -338,8 +337,6 @@ open_device(const char *dev, struct libusb20_device *pdev)
 		syslog(LOG_ERR, "Can not alloc config for %s", dev);
 		return (-1);
 	}
-
-	ddesc = libusb20_dev_get_device_desc(pdev);
 
 	/*
 	 * Iterate each interface.
