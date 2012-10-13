@@ -408,6 +408,7 @@ hid_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 	case USB_GET_REPORT:
 	case USB_SET_REPORT:
 		err = ENODEV;	/* not supported. */
+		break;
 			
 	case USB_GET_REPORT_ID:
 		UVHID_LOCK(sc);
