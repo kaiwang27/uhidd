@@ -112,10 +112,14 @@ This option implies
 Do not detach from the controlling terminal, i.e., run in
 foreground. This option is intended for debugging the daemon.
 .It Fl h
-Attach Virtual Generic class driver.
+Attach the Virtual Generic HID class driver.
 This option requires that
 .Xr cuse4bsd 4
 driver loaded as a kernel module.
+.It Fl H
+Specify the name of the virtual HID device created by the
+virtual generic HID driver. The default name used for the device is
+.Dq uvhid .
 .It Fl k
 Attach Keyboard class driver. This option requires that
 .Xr vkbd 4

@@ -89,14 +89,19 @@ application collection.
 .Pq Vt bool
 If set to
 .Dq Li YES ,
-enable the virtual general HID driver and attach it to any
-application collection that doesn't have a specific driver.
+enable the virtual generic HID driver and attach it to any
+application collection that does not have a specific driver.
 .It Va vhid_strip_id
 .Pq Vt bool
 If set to
 .Dq Li YES ,
 instruct the vhid driver to strip the leading report id byte
 before passing the report to user.
+.It Va vhid_devname
+.Pq Vt string
+Specify the name of the virtual HID device created by the
+virtual generic HID driver. The default name used for the device is
+.Dq uvhid .
 .It Va cc_attach
 .Pq Vt bool
 If set to
