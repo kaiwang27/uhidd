@@ -187,13 +187,13 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 
 	/*
 	 * There is no way to report tilt wheel to the kernel, for now
-	 * translate them to button #29 and #30.
+	 * translate them to button #5 and #6.
 	 */
 	if (has_twheel) {
 		if (dt > 0)
-			btn |= (1 << 29);
-		else
-			btn |= (1 << 30);
+			btn |= (1 << 5);
+		else if (dt < 0)
+			btn |= (1 << 6);
 	}
 
 	/* Push the data to console device. (and sysmouse) */
