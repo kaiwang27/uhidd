@@ -106,16 +106,16 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 	struct mouse_dev *md;
 	struct mouse_info mi;
 	unsigned int usage, up;
-	int has_wheel, has_twheel, has_z, flags;
-	int b, btn, dx, dy, dw, dt, dz, i;
+	int has_wheel, has_twheel, has_fake_twheel, has_z, flags;
+	int b, btn, dx, dy, dw, dt, df, dz, i;
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 	md = hid_appcol_get_private(ha);
 	assert(md != NULL);
 
-	dx = dy = dw = dt = dz = 0;
-	has_wheel = has_twheel = has_z = 0;
+	dx = dy = dw = dt = df = dz = 0;
+	has_wheel = has_twheel = has_fake_twheel = has_z = 0;
 	btn = 0;
 	hf = NULL;
 	while ((hf = hid_report_get_next_field(hr, hf, HID_INPUT)) != NULL) {
@@ -164,21 +164,37 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 				 * and newer M$ mouse stopped using 0x48 for
 				 * mouse wheel.
 				 */
-				has_twheel = 1;
-				dt = -hf->hf_value[i];
+				has_fake_twheel = 1;
+				df = -hf->hf_value[i];
 				break;
 			case HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_Z):
 				/* Some mouse use HUG_Z to report its wheel. */
 				has_z = 1;
 				dz = -hf->hf_value[i];
 				break;
+			case HID_USAGE2(HUP_CONSUMER, HUC_AC_PAN):
+				/* Tilt wheel. */
+				has_twheel = 1;
+				dt = -hf->hf_value[i];
+				break;
 			}
 		}
 	}
 
 	if (verbose > 1)
-		PRINT1("mouse received data: dx(%d) dy(%d) dw(%d) btn(%#x)\n",
-		    dx, dy, dw, btn);
+		PRINT1("mouse received data: dx(%d) dy(%d) dw(%d) dt(%d) "
+		    "btn(%#x)\n", dx, dy, dw, dt, btn);
+
+	/*
+	 * There is no way to report tilt wheel to the kernel, for now
+	 * translate them to button #29 and #30.
+	 */
+	if (has_twheel) {
+		if (dt > 0)
+			btn |= (1 << 29);
+		else
+			btn |= (1 << 30);
+	}
 
 	/* Push the data to console device. (and sysmouse) */
 	mi.operation = MOUSE_ACTION;
@@ -187,8 +203,8 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 	mi.u.data.buttons = btn;
 	if (has_wheel)
 		mi.u.data.z = dw;
-	else if (has_twheel)
-		mi.u.data.z = dt;
+	else if (has_fake_twheel)
+		mi.u.data.z = df;
 	else if (has_z)
 		mi.u.data.z = dz;
 	else
