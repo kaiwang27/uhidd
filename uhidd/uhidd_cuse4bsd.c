@@ -53,7 +53,8 @@ ucuse_init(void)
 {
 
 	if (cuse_init() != CUSE_ERR_NONE) {
-		syslog(LOG_ERR, "cuse_init failed");
+		syslog(LOG_ERR, "cuse_init failed. Please make sure the"
+		    " kernel module cuse4bsd.ko is loaded.");
 		return (-1);
 	}
 
