@@ -155,6 +155,9 @@ vhid_attach(struct hid_appcol *ha)
 	 * Create a new virtual hid device.
 	 */
 
+	if (ucuse_init() < 0)
+		return (-1);
+
 	classid = VHID_CUSE_INDEX - 'A';
 	if (cuse_alloc_unit_number_by_id(&devid, CUSE_ID_UHIDD(classid)) !=
 	    0) {
