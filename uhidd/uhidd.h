@@ -318,6 +318,8 @@ int		config_vhid_strip_id(struct hid_interface *);
 int		config_detach_kernel_driver(struct hid_interface *);
 void		find_hidaction(struct hid_appcol *);
 void		run_hidaction(struct hid_appcol *, struct hid_report *);
+int		ucuse_init(void);
+int		ucuse_create_worker(void);
 const char	*usage_page(int);
 const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);

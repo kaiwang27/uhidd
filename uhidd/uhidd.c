@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -168,6 +168,9 @@ main(int argc, char **argv)
 
 	/* Write pid file. */
 	pidfile_write(pfh);
+
+	if (ucuse_init() < 0)
+		goto uhidd_end;
 
 	STAILQ_INIT(&hilist);
 
