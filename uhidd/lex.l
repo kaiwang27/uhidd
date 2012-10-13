@@ -51,6 +51,7 @@ mouse_attach		{ return (T_MOUSE_ATTACH); }
 kbd_attach		{ return (T_KBD_ATTACH); }
 vhid_attach		{ return (T_VHID_ATTACH); }
 vhid_strip_id		{ return (T_VHID_STRIP_REPORT_ID); }
+vhid_devname		{ return (T_VHID_DEVNAME); }
 cc_attach		{ return (T_CC_ATTACH); }
 cc_keymap		{ return (T_CC_KEYMAP); }
 hidaction		{ return (T_HIDACTION); }

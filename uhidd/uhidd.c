@@ -83,7 +83,7 @@ main(int argc, char **argv)
 
 	eval = 0;
 
-	while ((opt = getopt(argc, argv, "c:dDhkmosuVv")) != -1) {
+	while ((opt = getopt(argc, argv, "c:dDhH:kmosuVv")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -97,6 +97,9 @@ main(int argc, char **argv)
 			break;
 		case 'h':
 			clconfig.vhid_attach = 1;
+			break;
+		case 'H':
+			clconfig.vhid_devname = optarg;
 			break;
 		case 'k':
 			clconfig.kbd_attach = 1;

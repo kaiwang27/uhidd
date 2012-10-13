@@ -52,8 +52,9 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #define VHID_CUSE_INDEX 'A'
-#define	VHID_QUEUE_SIZE	10240
-#define	VHID_MAX_REPORT_SIZE 255
+#define VHID_CUSE_DEFAULT_DEVNAME "uvhid"
+#define VHID_QUEUE_SIZE	10240
+#define VHID_MAX_REPORT_SIZE 255
 #define VHID_MAX_REPORT_DESC_SIZE 10240
 
 #define VHID_LOCK(s)		pthread_mutex_lock(&(s)->vd_mtx)
@@ -127,6 +128,7 @@ vhid_attach(struct hid_appcol *ha)
 	struct hid_interface *hi;
 	struct hid_report *hr;
 	struct vhid_dev *vd;
+	const char *dname;
 	int classid, devid, i;
 
 	hi = hid_appcol_get_parser_private(ha);
@@ -165,10 +167,14 @@ vhid_attach(struct hid_appcol *ha)
 		return (-1);
 	}
 
-	cuse_dev_create(&vhid_cuse_methods, vd, ha, 0, 0, 0660, "uvhid%d",
-	    devid);
+	dname = config_vhid_devname(hi);
+	if (dname == NULL)
+		dname = VHID_CUSE_DEFAULT_DEVNAME;
 
-	snprintf(vd->vd_name, sizeof(vd->vd_name), "uvhid%d", devid);
+	cuse_dev_create(&vhid_cuse_methods, vd, ha, 0, 0, 0660, "%s%d",
+	    dname, devid);
+
+	snprintf(vd->vd_name, sizeof(vd->vd_name), "%s%d", dname, devid);
 
 	/* Create worker threads. */
 	for (i = 0; i < 2; i++)
