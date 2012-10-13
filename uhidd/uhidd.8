@@ -1,4 +1,4 @@
-.\" Copyright (c) 2009, 2010 Kai Wang
+.\" Copyright (c) 2009, 2010, 2012 Kai Wang
 .\" All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
@@ -89,9 +89,11 @@ All other HID application collections that don't
 have a specific driver can be attached by the Virtual Generic HID
 class driver. The driver creates a virtual USB HID device using
 the
-.Xr uvhid 4
+.Xr cuse4bsd 4
 interface, so normal USB HID applications that deal with
-.Xr uhid 4
+.Xr uhid 4 ,
+e.g.
+.Xr usbhidctl 1 ,
 could access the data through the virutal interface.
 .Sh OPTIONS
 The
@@ -112,9 +114,8 @@ foreground. This option is intended for debugging the daemon.
 .It Fl h
 Attach Virtual Generic class driver.
 This option requires that
-.Xr uvhid 4
-driver compiled in the kernel
-or loaded as a kernel module.
+.Xr cuse4bsd 4
+driver loaded as a kernel module.
 .It Fl k
 Attach Keyboard class driver. The option requires that
 .Xr vkbd 4
@@ -129,7 +130,7 @@ from the hid report data. This is needed if the hid application is
 using
 .Xr usbhid 3
 parser to parse the data read from the simulated
-.Xr uvhid 4
+.Xr uhid 4
 interface.
 .It Fl u
 When this options is specified, if there is already an active kernel
@@ -166,10 +167,11 @@ the in-memory multimedia keymap for device ugen.%u.%u
 .El
 .Sh SEE ALSO
 .Xr usbhidaction 1 ,
+.Xr usbhidctl 1 ,
+.Xr cuse4bsd 3 ,
 .Xr usb 3 ,
 .Xr usbhid 3 ,
 .Xr uhid 4 ,
-.Xr uvhid 4 ,
 .Xr vkbd 4 ,
 .Xr uhidd.conf 5 ,
 .Xr bthidd 8 ,
