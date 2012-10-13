@@ -398,7 +398,7 @@ vhid_read(struct cuse_dev *cdev, int fflags, void *peer_ptr, int len)
 	}
 	vd->vd_flags |= VHID_READ;
 
-	n = 0;
+	amnt = n = 0;
 
 read_again:
 	if (rq->cc > 0) {
@@ -424,7 +424,10 @@ read_done:
 	vd->vd_flags &= ~VHID_READ;
 	VHID_UNLOCK(vd);
 
-	return (err);
+	if (err)
+		return (err);
+
+	return (amnt);
 }
 
 static int
@@ -476,7 +479,10 @@ write_done:
 	vd->vd_flags &= ~VHID_WRITE;
 	VHID_UNLOCK(vd);
 
-	return (err);
+	if (err)
+		return (err);
+
+	return (len);
 }
 
 static int
