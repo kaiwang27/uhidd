@@ -169,9 +169,6 @@ main(int argc, char **argv)
 	/* Write pid file. */
 	pidfile_write(pfh);
 
-	if (ucuse_init() < 0)
-		goto uhidd_end;
-
 	STAILQ_INIT(&hilist);
 
 	if (find_device(*argv) < 0) {

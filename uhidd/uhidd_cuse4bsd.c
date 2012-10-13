@@ -37,6 +37,8 @@ __FBSDID("$FreeBSD $");
 
 #include "uhidd.h"
 
+static int cuse4bsd_init = 0;
+
 #if 0
 const char *uhidd_cusedevs[] = {
 	"Auhid%d",
@@ -52,11 +54,19 @@ int
 ucuse_init(void)
 {
 
+	if (cuse4bsd_init)
+		return (0);
+
 	if (cuse_init() != CUSE_ERR_NONE) {
 		syslog(LOG_ERR, "cuse_init failed. Please make sure the"
 		    " kernel module cuse4bsd.ko is loaded.");
 		return (-1);
 	}
+
+	cuse4bsd_init = 1;
+
+	if (verbose)
+		syslog(LOG_INFO, "cuse4bsd initiailzed.");
 
 	return (0);
 }
