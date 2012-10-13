@@ -450,6 +450,8 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 				PRINT1("kernel driver detached!\n");
 		} else {
 			PRINT1("Abort attach since kernel driver is active\n");
+			PRINT1("Please try running uhidd with option '-u' to "
+			    "detach the kernel drivers\n");
 			free(hi);
 			return;
 		}
