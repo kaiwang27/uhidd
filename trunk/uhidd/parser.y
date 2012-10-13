@@ -60,6 +60,7 @@ static struct device_config dconfig, *dconfig_p;
 %token T_KBD_ATTACH
 %token T_VHID_ATTACH
 %token T_VHID_STRIP_REPORT_ID
+%token T_VHID_DEVNAME
 %token T_CC_ATTACH
 %token T_CC_KEYMAP
 %token T_HIDACTION
@@ -143,6 +144,7 @@ conf_entry
 	| cc_keymap
 	| vhid_attach
 	| vhid_strip_id
+	| vhid_devname
 	| hidaction
 	;
 
@@ -206,6 +208,12 @@ vhid_strip_id
 	| T_VHID_STRIP_REPORT_ID "=" T_NO {
 		dconfig.vhid_strip_id = -1;
 	}
+
+vhid_devname
+	: T_VHID_DEVNAME "=" T_STRING {
+		dconfig.vhid_devname = $3;
+	}
+	;
 
 hidaction
 	: T_HIDACTION "=" "{" hidaction_entry_list "}"
@@ -384,6 +392,20 @@ config_vhid_strip_id(struct hid_interface *hi)
 		return (clconfig.vhid_strip_id);
 
 	return (uconfig.gconfig.vhid_strip_id);
+}
+
+char *
+config_vhid_devname(struct hid_interface *hi)
+{
+	struct device_config *dc;
+
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
+	if (dc != NULL && dc->vhid_devname != NULL)
+		return (dc->vhid_devname);
+	if (clconfig.vhid_devname != NULL)
+		return (clconfig.vhid_devname);
+
+	return (uconfig.gconfig.vhid_devname);
 }
 
 int
