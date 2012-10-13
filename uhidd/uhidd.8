@@ -117,9 +117,12 @@ This option requires that
 .Xr cuse4bsd 4
 driver loaded as a kernel module.
 .It Fl k
-Attach Keyboard class driver. The option requires that
+Attach Keyboard class driver. This option requires that
 .Xr vkbd 4
-compiled in the kernel or loaded as a kernel module.
+compiled in the kernel or loaded as a kernel module,
+and that the keyboard multiplexer
+.Xr kbdmux 4
+be enabled.
 .It Fl m
 Attach Mouse class driver.
 .It Fl o
