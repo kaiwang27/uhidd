@@ -266,7 +266,6 @@ terminate(int eval)
 
 	pidfile_remove(pfh);
 	remove_runtime_dir();
-	syslog(LOG_NOTICE, "terminated\n");
 
 	exit(eval);
 }
