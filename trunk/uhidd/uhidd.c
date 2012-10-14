@@ -442,7 +442,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	 */
 	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
 		PRINT1("Kernel driver is active\n");
-		if (config_detach_kernel_driver(hi)) {
+		if (config_detach_kernel_driver(hi) > 0) {
 			if (libusb20_dev_detach_kernel_driver(pdev, ndx) != 0) {
 				PRINT1("Unable to detach kernel driver: "
 				    "libusb20_dev_detach_kernel_driver "
