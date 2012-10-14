@@ -1,0 +1,6 @@
+notify 0 {
+	match "subsystem" "DEVICE";
+	match "type" "ATTACH";
+	match "cdev" "ugen[0-9]+.[0-9]+";
+	action "env LD_PRELOAD=%%LIBCUSE%% %%PREFIX%%/etc/rc.d/uhidd start /dev/$cdev";
+};
