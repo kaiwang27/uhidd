@@ -68,16 +68,18 @@ ucuse_init_again:
 			syslog(LOG_ERR, "cuse_init failed. Abort!");
 			return (-1);
 		} else {
-			syslog(LOG_INFO, "Attempt to load kernel module "
-			    "cuse4bsd.ko...");
+			if (verbose)
+				syslog(LOG_INFO, "Attempt to load kernel"
+				    " module cuse4bsd.ko...");
 			status = system("kldload cuse4bsd");
 			if (WEXITSTATUS(status) != 0) {
-				syslog(LOG_ERR, "Failed to load cuse4bsd "
-				    "kernel module");
+				syslog(LOG_ERR, "Failed to load cuse4bsd"
+				    " kernel module");
 				return (-1);
 			}
-			syslog(LOG_INFO, "Successfully loaded cuse4bsd "
-			    "kernel module");
+			if (verbose)
+				syslog(LOG_INFO, "Successfully loaded"
+				    " cuse4bsd kernel module");
 			cuse4bsd_load = 1;
 			goto ucuse_init_again;
 		}
