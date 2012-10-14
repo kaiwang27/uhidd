@@ -161,6 +161,33 @@ verbosity. This option implies
 .Pp
 There are more options that can be configured through
 .Xr uhidd.conf 5 .
+.Sh CAVEATS
+The
+.Nm uhidd
+daemon can coexist with the kernel USB HID drivers for keyboard, mouse etc.
+When the daemon starts, if it detects there is an active kernel driver
+already attached to the device, it will abort gracefully. If the option
+.Fl u
+is specified or the configuration option
+.Dq detach_kernel_driver
+is applicable for the device, it will attempt to detach the kernel driver
+first before attaching itself to the device.
+.Pp
+However note that if the kernel USB HID drivers are compiled as kernel
+modules and are not yet loaded at the point when the device is attached
+to the system, the
+.Nm uhidd
+daemon will attach itself to the device first, and the kernel driver will
+be loaded and attached to the device after. As a result, both
+.Nm uhidd
+daemon and the kernel driver will attach to the device at the same time,
+which causes undefined behaviours.
+To overcome this problem, when the kernel drivers are compiled as modules,
+the
+.Xr devd 8
+rules listed in the
+.Dq /etc/devd/usb.conf
+config file for the relevant USB HID kernel modules should be removed.
 .Sh FILES
 .Bl -tag -width /var/run/uhidd.ugen.%u.%u.pid/cc_keymap -compact
 .It Pa /usr/local/etc/uhidd.conf
