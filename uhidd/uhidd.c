@@ -751,6 +751,6 @@ static void
 version(void)
 {
 
-	fprintf(stderr, "uhidd 0.2.0\n");
+	fprintf(stderr, "uhidd 0.2.1\n");
 	exit(0);
 }
