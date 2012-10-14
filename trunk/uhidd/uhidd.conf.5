@@ -73,6 +73,16 @@ device identifier called
 Sub options under
 .Va default
 apply to all the devices.
+.It Va detach_kernel_driver
+.Pq Vt bool
+If set to
+.Dq Li YES ,
+the
+.Nm uhidd
+daemon will detach the active kernel driver attached to
+the device before attaching itself. Otherwise the daemon
+will abort and let the kernel driver continue handling
+the device.
 .It Va kbd_attach
 .Pq Vt bool
 If set to
