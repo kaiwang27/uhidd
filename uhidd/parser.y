@@ -64,6 +64,7 @@ static struct device_config dconfig, *dconfig_p;
 %token T_CC_ATTACH
 %token T_CC_KEYMAP
 %token T_HIDACTION
+%token T_DETACHKERNELDRIVER
 %token <val> T_NUM
 %token <val> T_HEX
 %token <str> T_USAGE
@@ -146,6 +147,7 @@ conf_entry
 	| vhid_strip_id
 	| vhid_devname
 	| hidaction
+	| detach_kernel_driver
 	;
 
 mouse_attach
@@ -214,6 +216,14 @@ vhid_devname
 		dconfig.vhid_devname = $3;
 	}
 	;
+
+detach_kernel_driver
+	: T_DETACHKERNELDRIVER "=" T_YES {
+		dconfig.detach_kernel_driver = 1;
+	}
+	| T_DETACHKERNELDRIVER "=" T_NO {
+		dconfig.detach_kernel_driver = -1;
+	}
 
 hidaction
 	: T_HIDACTION "=" "{" hidaction_entry_list "}"
