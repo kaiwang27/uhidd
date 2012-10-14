@@ -10,11 +10,15 @@ MAN=		uhidd.conf.5 uhidd.8
 
 WARNS?=	6
 
+PREFIX?=	/usr/local
+LOCALBASE?=	/usr/local
+LIBDIR=		${PREFIX}/lib
+
 DPADD=	${LIBUSB} ${LIBPTHREAD} ${LIBUTIL}
 LDADD=	-lcuse4bsd -lusb -lpthread -lutil
 
-CFLAGS+=-I. -I${.CURDIR} -I/usr/local/include -g
-LDFLAGS+= -L/usr/local/lib
+CFLAGS+= -I. -I${.CURDIR} -I${LOCALBASE}/include -g
+LDFLAGS+= -L${LIBDIR}
 
 .SUFFIXES:	.awk .c
 .awk.c:
