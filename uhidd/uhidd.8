@@ -140,13 +140,18 @@ parser to parse the data read from the simulated
 .Xr uhid 4
 interface.
 .It Fl u
-When this options is specified, if there is already an active kernel
-driver attached to the device interface,
+When this option is specified, if there is an active kernel
+driver attached to the device interface, the
 .Nm uhidd
 daemon will try to detach the active kernel driver first, before
-attaching the interface.
+attaching itself to the device.
 This option is easpecially useful when there is no easy way to
 unload the kernel USB HID device drivers.
+If this option is not present and the
+.Nm uhidd
+daemon finds out the device is already attached by a kernel
+driver, it will abort and let the kernel driver continue handling
+the device.
 .It Fl V
 Output the version of
 .Nm
