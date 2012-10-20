@@ -742,8 +742,8 @@ static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: uhidd [-c config_file] [-H devname] [-dhkmosuvV] "
-	    "/dev/ugen%%u.%%u\n");
+	fprintf(stderr, "usage: uhidd [-c config_file] [-H devname] "
+	    "[-dhkmosuvV] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
 
