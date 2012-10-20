@@ -43,7 +43,8 @@ extern int yyparse(void);
 extern int lineno;
 extern FILE *yyin;
 
-static void	config_add_keymap_entry(char *usage, char *hex);
+static void config_add_keymap_entry(char *usage, char *hex);
+static void config_add_keymap_entry_val(int i, char *hex);
 
 const char *config_file = "/usr/local/etc/uhidd.conf";
 struct uhidd_config uconfig;
@@ -192,6 +193,9 @@ cc_keymap_entry
 	: T_USAGE "=" T_STRING {
 		config_add_keymap_entry($1, $3);
 	}
+	| T_HEX "=" T_STRING {
+		config_add_keymap_entry_val($1, $3);
+	}
 	;
 
 vhid_attach
@@ -289,6 +293,18 @@ config_add_keymap_entry(char *usage, char *hex)
 			break;
 		}
 	}
+}
+
+static void
+config_add_keymap_entry_val(int i, char *hex)
+{
+	int value;
+
+	value = strtoul(hex, NULL, 16);
+	if (value > 127)
+		return;
+	if (i < _MAX_MM_KEY)
+		dconfig.cc_keymap[i] = value;
 }
 
 void
