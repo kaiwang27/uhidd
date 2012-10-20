@@ -66,8 +66,8 @@ static const char *_usage_consumer[] = {
 /*  1D */	"Reserved",
 /*  1E */	"Reserved",
 /*  1F */	"Reserved",
-/*  20 */	"+10",
-/*  21 */	"+100",
+/*  20 */	"Plus_Ten",	/* +10 */
+/*  21 */	"Plus_Hundred",	/* +100 */
 /*  22 */	"AM/PM",
 /*  23 */	"Reserved",
 /*  24 */	"Reserved",
