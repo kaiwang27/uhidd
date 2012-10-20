@@ -502,24 +502,19 @@ alloc_hid_interface_be(struct hid_interface *hi)
 	return (0);
 }
 
-static void *
-start_hid_interface(void *arg)
+int
+hid_handle_kernel_driver(struct hid_parser *hp)
 {
 	struct hid_interface *hi;
 	struct libusb20_device *pdev;
-	struct libusb20_transfer *xfer;
-	char buf[4096];
-	uint32_t actlen;
-	uint8_t x;
-	int e, i, ndx;
-
-	hi = arg;
-	assert(hi != NULL);
+	int ndx;
 
 	/*
 	 * Check if any kernel driver is attached to this interface.
 	 */
 
+	hi = hid_parser_get_private(hp);
+	assert(hi != NULL);
 	pdev = hi->pdev;
 	ndx = hi->ndx;
 	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
@@ -529,17 +524,32 @@ start_hid_interface(void *arg)
 				PRINT1("Unable to detach kernel driver: "
 				    "libusb20_dev_detach_kernel_driver "
 				    "failed\n");
-				return (NULL);
+				return (-1);
 			} else
 				PRINT1("kernel driver detached!\n");
 		} else {
 			PRINT1("Abort attach since kernel driver is active\n");
 			PRINT1("Please try running uhidd with option '-u' to "
 			    "detach the kernel drivers\n");
-			return (NULL);
+			return (-1);
 		}
-	} else
-		PRINT1("Kernel driver is not active\n");
+	}
+
+	return (0);
+}
+
+static void *
+start_hid_interface(void *arg)
+{
+	struct hid_interface *hi;
+	struct libusb20_transfer *xfer;
+	char buf[4096];
+	uint32_t actlen;
+	uint8_t x;
+	int e, i;
+
+	hi = arg;
+	assert(hi != NULL);
 
 	/*
 	 * Start receiving data from the endpoint.

@@ -299,6 +299,7 @@ void		hid_field_get_usage_value(struct hid_field *, int,
 int		hid_field_get_usage_min(struct hid_field *);
 int		hid_field_get_usage_max(struct hid_field *);
 void		hid_field_set_value(struct hid_field *, int, int);
+int		hid_handle_kernel_driver(struct hid_parser *);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
 void		kbd_input(struct hid_appcol *, uint8_t, uint16_t *, int);
