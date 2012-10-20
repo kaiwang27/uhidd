@@ -144,9 +144,13 @@ hid_parser_attach_drivers(struct hid_parser *hp)
 				}
 			}
 		}
-		if (mhd != NULL && mhd->ha_drv_attach(ha) == 0) {
-			ha->ha_drv = mhd;
-			hp->hp_attached++;
+		if (mhd != NULL) {
+			if (hid_handle_kernel_driver(hp) < 0)
+				break;
+			if (mhd->ha_drv_attach(ha) == 0) {
+				ha->ha_drv = mhd;
+				hp->hp_attached++;
+			}
 		}
 	}
 }
