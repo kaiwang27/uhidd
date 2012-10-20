@@ -186,7 +186,10 @@ cc_write_keymap_file(struct hid_interface *hi)
 	fprintf(fp, "\tcc_keymap={\n");
 	for (i = 0; i < usage_consumer_num && i < _MAX_MM_KEY; i++) {
 		if (hi->cc_keymap[i]) {
-			fprintf(fp, "\t\t%s=", usage_consumer[i]);
+			if (!strcasecmp(usage_consumer[i], "Reserved"))
+				fprintf(fp, "\t\t0x%X=", (unsigned) i);
+			else
+				fprintf(fp, "\t\t%s=", usage_consumer[i]);
 			fprintf(fp, "\"0x%02X\"\n", hi->cc_keymap[i]);
 		}
 	}
