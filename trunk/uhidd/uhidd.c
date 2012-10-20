@@ -437,30 +437,6 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	hi->product_id = ddesc->idProduct;
 
 	/*
-	 * Check if any kernel driver is attached to this interface.
-	 */
-	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
-		PRINT1("Kernel driver is active\n");
-		if (config_detach_kernel_driver(hi) > 0) {
-			if (libusb20_dev_detach_kernel_driver(pdev, ndx) != 0) {
-				PRINT1("Unable to detach kernel driver: "
-				    "libusb20_dev_detach_kernel_driver "
-				    "failed\n");
-				free(hi);
-				return;
-			} else
-				PRINT1("kernel driver detached!\n");
-		} else {
-			PRINT1("Abort attach since kernel driver is active\n");
-			PRINT1("Please try running uhidd with option '-u' to "
-			    "detach the kernel drivers\n");
-			free(hi);
-			return;
-		}
-	} else
-		PRINT1("Kernel driver is not active\n");
-
-	/*
 	 * Find the input interrupt endpoint.
 	 */
 
@@ -530,14 +506,44 @@ static void *
 start_hid_interface(void *arg)
 {
 	struct hid_interface *hi;
+	struct libusb20_device *pdev;
 	struct libusb20_transfer *xfer;
 	char buf[4096];
 	uint32_t actlen;
 	uint8_t x;
-	int e, i;
+	int e, i, ndx;
 
 	hi = arg;
 	assert(hi != NULL);
+
+	/*
+	 * Check if any kernel driver is attached to this interface.
+	 */
+
+	pdev = hi->pdev;
+	ndx = hi->ndx;
+	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
+		PRINT1("Kernel driver is active\n");
+		if (config_detach_kernel_driver(hi) > 0) {
+			if (libusb20_dev_detach_kernel_driver(pdev, ndx) != 0) {
+				PRINT1("Unable to detach kernel driver: "
+				    "libusb20_dev_detach_kernel_driver "
+				    "failed\n");
+				return (NULL);
+			} else
+				PRINT1("kernel driver detached!\n");
+		} else {
+			PRINT1("Abort attach since kernel driver is active\n");
+			PRINT1("Please try running uhidd with option '-u' to "
+			    "detach the kernel drivers\n");
+			return (NULL);
+		}
+	} else
+		PRINT1("Kernel driver is not active\n");
+
+	/*
+	 * Start receiving data from the endpoint.
+	 */
 
 	if (verbose)
 		PRINT1("HID interface task started\n");
