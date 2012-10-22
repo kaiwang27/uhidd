@@ -152,6 +152,12 @@ If this option is not present and the
 daemon finds out the device is already attached by a kernel
 driver, it will abort and let the kernel driver continue handling
 the device.
+.It Fl U
+When this option is specified, the
+.Nm uhidd
+deamon will attach the device interface even if there is an
+active kernel driver attached to the device, or if the daemon
+fails to detach the kernel driver.
 .It Fl V
 Output the version of
 .Nm
