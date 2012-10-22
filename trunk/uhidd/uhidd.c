@@ -83,7 +83,7 @@ main(int argc, char **argv)
 
 	eval = 0;
 
-	while ((opt = getopt(argc, argv, "c:dDhH:kmosuVv")) != -1) {
+	while ((opt = getopt(argc, argv, "c:dDhH:kmosuUvV")) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -115,6 +115,9 @@ main(int argc, char **argv)
 			break;
 		case 'u':
 			clconfig.detach_kernel_driver = 1;
+			break;
+		case 'U':
+			clconfig.forced_attach = 1;
 			break;
 		case 'v':
 			detach = 0;
@@ -524,13 +527,23 @@ hid_handle_kernel_driver(struct hid_parser *hp)
 				PRINT1("Unable to detach kernel driver: "
 				    "libusb20_dev_detach_kernel_driver "
 				    "failed\n");
+				if (config_forced_attach(hi) > 0) {
+					PRINT1("Continue anyway\n");
+					return (0);
+				}
 				return (-1);
 			} else
 				PRINT1("kernel driver detached!\n");
 		} else {
+			if (config_forced_attach(hi) > 0) {
+				PRINT1("Continue anyway\n");
+				return (0);
+			}
 			PRINT1("Abort attach since kernel driver is active\n");
 			PRINT1("Please try running uhidd with option '-u' to "
 			    "detach the kernel drivers\n");
+			PRINT1("or specify option '-U' to force attaching the"
+			    " interface\n")
 			return (-1);
 		}
 	}
@@ -759,7 +772,7 @@ usage(void)
 {
 
 	fprintf(stderr, "usage: uhidd [-c config_file] [-H devname] "
-	    "[-dhkmosuvV] /dev/ugen%%u.%%u\n");
+	    "[-dDhkmosuUvV] /dev/ugen%%u.%%u\n");
 	exit(1);
 }
 

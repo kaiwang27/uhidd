@@ -56,6 +56,7 @@ cc_attach		{ return (T_CC_ATTACH); }
 cc_keymap		{ return (T_CC_KEYMAP); }
 hidaction		{ return (T_HIDACTION); }
 detach_kernel_driver	{ return (T_DETACHKERNELDRIVER); }
+forced_attach		{ return (T_FORCED_ATTACH); }
 
 0x[0-9a-fA-F]+		{
 				yylval.val = strtoul(yytext, NULL, 16);

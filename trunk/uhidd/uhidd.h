@@ -182,6 +182,7 @@ struct device_config {
 	int detach_kernel_driver;
 	int vhid_strip_id;
 	char *vhid_devname;
+	int forced_attach;
 	STAILQ_HEAD(, hidaction_config) haclist;
 	STAILQ_ENTRY(device_config) next;
 };
@@ -319,6 +320,7 @@ int		config_read_file(void);
 int		config_vhid_strip_id(struct hid_interface *);
 char		*config_vhid_devname(struct hid_interface *);
 int		config_detach_kernel_driver(struct hid_interface *);
+int		config_forced_attach(struct hid_interface *);
 void		find_hidaction(struct hid_appcol *);
 void		run_hidaction(struct hid_appcol *, struct hid_report *);
 int		ucuse_init(void);
