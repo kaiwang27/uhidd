@@ -66,6 +66,7 @@ static struct device_config dconfig, *dconfig_p;
 %token T_CC_KEYMAP
 %token T_HIDACTION
 %token T_DETACHKERNELDRIVER
+%token T_FORCED_ATTACH
 %token <val> T_NUM
 %token <val> T_HEX
 %token <str> T_USAGE
@@ -149,6 +150,7 @@ conf_entry
 	| vhid_devname
 	| hidaction
 	| detach_kernel_driver
+	| forced_attach
 	;
 
 mouse_attach
@@ -228,6 +230,15 @@ detach_kernel_driver
 	| T_DETACHKERNELDRIVER "=" T_NO {
 		dconfig.detach_kernel_driver = -1;
 	}
+
+forced_attach
+	: T_FORCED_ATTACH "=" T_YES {
+		dconfig.forced_attach = 1;
+	}
+	| T_FORCED_ATTACH "=" T_NO {
+		dconfig.forced_attach = -1;
+	}
+
 
 hidaction
 	: T_HIDACTION "=" "{" hidaction_entry_list "}"
@@ -446,4 +457,18 @@ config_detach_kernel_driver(struct hid_interface *hi)
 		return (clconfig.detach_kernel_driver);
 
 	return (uconfig.gconfig.detach_kernel_driver);
+}
+
+int
+config_forced_attach(struct hid_interface *hi)
+{
+	struct device_config *dc;
+
+	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
+	if (dc != NULL && dc->forced_attach)
+		return (dc->forced_attach);
+	if (clconfig.forced_attach)
+		return (clconfig.forced_attach);
+
+	return (uconfig.gconfig.forced_attach);
 }
