@@ -33,6 +33,7 @@
  * HID parser.
  */
 
+#define _TR_BUFSIZE 4096
 #define _MAX_RDESC_SIZE	16384
 #define _MAX_REPORT_IDS	256
 #define	_MAX_MM_KEY	1024
