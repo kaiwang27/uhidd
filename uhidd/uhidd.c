@@ -556,7 +556,7 @@ start_hid_interface(void *arg)
 {
 	struct hid_interface *hi;
 	struct libusb20_transfer *xfer;
-	char buf[4096];
+	char *buf;
 	uint32_t actlen;
 	uint8_t x;
 	int e, i;
@@ -571,6 +571,12 @@ start_hid_interface(void *arg)
 	if (verbose)
 		PRINT1("HID interface task started\n");
 
+	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
+		syslog(LOG_ERR, "%s[%d] malloc failed\n", basename(hi->dev),
+		    hi->ndx);
+		goto parent_end;
+	}
+
 	x = (hi->ep & LIBUSB20_ENDPOINT_ADDRESS_MASK) * 2;
 	x |= 1;			/* IN transfer. */
 	xfer = libusb20_tr_get_pointer(hi->pdev, x);
@@ -580,7 +586,7 @@ start_hid_interface(void *arg)
 		goto parent_end;
 	}
 
-	e = libusb20_tr_open(xfer, 4096, 1, hi->ep);
+	e = libusb20_tr_open(xfer, _TR_BUFSIZE, 1, hi->ep);
 	if (e == LIBUSB20_ERROR_BUSY) {
 		PRINT1("xfer already opened\n");
 	} else if (e) {
@@ -634,6 +640,8 @@ start_hid_interface(void *arg)
 
 parent_end:
 
+	free(buf);
+
 	if (verbose)
 		PRINT1("HID parent exit\n");
 
@@ -661,7 +669,7 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 		return (-1);
 	}
 
-	e = libusb20_tr_open(xfer, 4096, 1, XXX); /* FIXME */
+	e = libusb20_tr_open(xfer, _TR_BUFSIZE, 1, XXX); /* FIXME */
 	if (e && e != LIBUSB20_ERROR_BUSY) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
 		    basename(hi->dev), hi->ndx);

@@ -761,10 +761,16 @@ void
 hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_field *hf;
-	char buf[4096], *p;
+	char *buf, *p;
 	int data, i, j, end, off, mask, pos, size, total;
 
 	total = 0;
+
+	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
+		warn("malloc");
+		return;
+	}
+
 	p = buf;
 
 	if (hr->hr_id != 0) {
@@ -799,6 +805,7 @@ hid_appcol_xfer_data(struct hid_appcol *ha, struct hid_report *hr)
 	total = (total + 7) / 8;
 
 	hid_parser_output_data(ha->ha_hp, hr->hr_id, buf, total);
+	free(buf);
 }
 
 void

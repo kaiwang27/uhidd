@@ -199,7 +199,7 @@ vhid_task(void *arg)
 	struct hid_interface *hi;
 	struct hid_appcol *ha;
 	struct vhid_dev *vd;
-	char buf[4096];
+	char *buf;
 	int i, len;
 
 	ha = arg;
@@ -208,6 +208,12 @@ vhid_task(void *arg)
 	assert(hi != NULL);
 	vd = hid_appcol_get_private(ha);
 	assert(vd != NULL);
+
+	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
+		syslog(LOG_ERR, "%s[%d] malloc failed: %m", basename(hi->dev),
+		    hi->ndx);
+		return (NULL);
+	}
 
 	for (;;) {
 		len = read(vd->vd_fd, buf, sizeof(buf));
@@ -229,6 +235,8 @@ vhid_task(void *arg)
 		else
 			hid_appcol_xfer_raw_data(ha, vd->vd_rid, buf, len);
 	}
+
+	free(buf);
 
 	return (NULL);
 }
