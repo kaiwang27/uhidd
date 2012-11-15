@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -198,7 +198,7 @@ cc_write_keymap_file(struct hid_interface *hi)
 }
 
 static int
-cc_tr(void *context, int hid_key)
+cc_tr(void *context, struct hid_key hk)
 {
 	struct hid_interface *hi;
 	struct device_config *dconfig;
@@ -211,14 +211,14 @@ cc_tr(void *context, int hid_key)
 	 */
 	dconfig = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dconfig != NULL && dconfig->cc_keymap_set) {
-		if (dconfig->cc_keymap[hid_key] != 0)
-			return (dconfig->cc_keymap[hid_key]);
+		if (dconfig->cc_keymap[hk.code] != 0)
+			return (dconfig->cc_keymap[hk.code]);
 		else
 			return (-1);
 	}
 	if (uconfig.gconfig.cc_keymap_set) {
-		if (uconfig.gconfig.cc_keymap[hid_key] != 0)
-			return (uconfig.gconfig.cc_keymap[hid_key]);
+		if (uconfig.gconfig.cc_keymap[hk.code] != 0)
+			return (uconfig.gconfig.cc_keymap[hk.code]);
 		else
 			return (-1);
 	}
@@ -226,23 +226,23 @@ cc_tr(void *context, int hid_key)
 	/*
 	 * Check if there is a key translation in the in-memory keymap.
 	 */
-	if (hi->cc_keymap[hid_key] != 0)
-		return (hi->cc_keymap[hid_key]);
+	if (hi->cc_keymap[hk.code] != 0)
+		return (hi->cc_keymap[hk.code]);
 
 	/*
 	 * Try allocating a free key for this "HID key".
 	 */
 	if (hi->free_key_pos < _FREE_KEY_COUNT) {
-		hi->cc_keymap[hid_key] = free_key[hi->free_key_pos];
+		hi->cc_keymap[hk.code] = free_key[hi->free_key_pos];
 		hi->free_key_pos++;
 		cc_write_keymap_file(hi);
 		if (verbose)
 			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
-			    hid_key, hi->cc_keymap[hid_key]);
-		return (hi->cc_keymap[hid_key]);
+			    hk.code, hi->cc_keymap[hk.code]);
+		return (hi->cc_keymap[hk.code]);
 	} else {
 		if (verbose)
-			PRINT1("no more free key for hid key: 0x%x\n", hid_key);
+			PRINT1("no more free key for hid key: 0x%x\n", hk.code);
 		return (-1);
 	}
 }
@@ -304,7 +304,7 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 	struct hid_field *hf;
 	unsigned int up;
 	int i, flags, total;
-	uint16_t keycodes[MAX_KEYCODE];
+	struct hid_key keycodes[MAX_KEYCODE];
 	uint16_t key;
 
 	/*
@@ -348,13 +348,14 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 	memset(keycodes, 0, sizeof(keycodes));
 	for (i = 0; i < value; i++) {
 		/* Key press. */
-		keycodes[0] = key;
+		keycodes[0].code = key;
+		keycodes[0].up = HUP_CONSUMER;
 		kbd_input(ha, 0, keycodes, total);
 		if (verbose > 1)
 			PRINT1("hid codes: 0x%02X (HUG_VOLUME)\n",
-			    keycodes[0]);
+			    keycodes[0].code);
 		/* Key release. */
-		keycodes[0] = 0;
+		keycodes[0].code = 0;
 		kbd_input(ha, 0, keycodes, total);
 		if (verbose > 1)
 			PRINT1("hid codes: none (HUG_VOLUME)\n");
@@ -366,9 +367,9 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
+	struct hid_key keycodes[MAX_KEYCODE];
 	unsigned int usage, up;
 	int i, value, cnt, flags, total;
-	uint16_t keycodes[MAX_KEYCODE];
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
@@ -397,7 +398,9 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 			if (value) {
 				if (cnt >= MAX_KEYCODE)
 					continue;
-				keycodes[cnt++] = HID_USAGE(usage);
+				keycodes[cnt].code = HID_USAGE(usage);
+				keycodes[cnt].up = up;
+				cnt++;
 			}
 		}
 	}
@@ -407,7 +410,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		if (cnt == 0)
 			printf("none");
 		for (i = 0; i < cnt; i++)
-			printf("0x%02X ", keycodes[i]);
+			printf("0x%02X ", keycodes[i].code);
 		putchar('\n');
 	}
 

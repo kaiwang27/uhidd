@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010 Kai Wang
+ * Copyright (c) 2009, 2010, 2012 Kai Wang
  * All rights reserved.
  * Copyright (c) 2006 Maksim Yevmenkin <m_evmenkin@yahoo.com>
  * All rights reserved.
@@ -100,7 +100,7 @@ struct kbd_data {
 #define	MOD_WIN_L	0x08
 #define	MOD_WIN_R	0x80
 
-	uint16_t keycode[MAX_KEYCODE];
+	struct hid_key keycode[MAX_KEYCODE];
 	uint32_t time[MAX_KEYCODE];
 };
 
@@ -116,7 +116,7 @@ struct kbd_dev {
 	uint32_t now;
 	int delay1;
 	int delay2;
-	int (*kbd_tr)(void *, int);	/* Keycode translate function. */
+	int (*kbd_tr)(void *, struct hid_key); /* Keycode translator. */
 
 #define KB_DELAY1	500
 #define KB_DELAY2	100
@@ -386,24 +386,25 @@ static int32_t const	x[] =
 #define xsize	((int32_t)(sizeof(x)/sizeof(x[0])))
 
 struct kbd_mods {
-	uint32_t mask, key;
+	uint32_t mask;
+	struct hid_key key;
 };
 
 #define	KBD_NMOD	8
 static struct kbd_mods kbd_mods[KBD_NMOD] = {
-	{MOD_CONTROL_L, 0xe0},
-	{MOD_CONTROL_R, 0xe4},
-	{MOD_SHIFT_L, 0xe1},
-	{MOD_SHIFT_R, 0xe5},
-	{MOD_ALT_L, 0xe2},
-	{MOD_ALT_R, 0xe6},
-	{MOD_WIN_L, 0xe3},
-	{MOD_WIN_R, 0xe7},
+	{.mask = MOD_CONTROL_L,	.key = {HUP_KEYBOARD, 0xe0}},
+	{.mask = MOD_CONTROL_R,	.key = {HUP_KEYBOARD, 0xe4}},
+	{.mask = MOD_SHIFT_L,	.key = {HUP_KEYBOARD, 0xe1}},
+	{.mask = MOD_SHIFT_R,	.key = {HUP_KEYBOARD, 0xe5}},
+	{.mask = MOD_ALT_L,	.key = {HUP_KEYBOARD, 0xe2}},
+	{.mask = MOD_ALT_R,	.key = {HUP_KEYBOARD, 0xe6}},
+	{.mask = MOD_WIN_L,	.key = {HUP_KEYBOARD, 0xe3}},
+	{.mask = MOD_WIN_R,	.key = {HUP_KEYBOARD, 0xe7}},
 };
 
 static void	*kbd_task(void *arg);
 static void	*kbd_status_task(void *arg);
-static void	kbd_write(struct kbd_dev *kd, int hid_key, int make);
+static void	kbd_write(struct kbd_dev *kd, struct hid_key hk, int make);
 static void	kbd_process_keys(struct kbd_dev *kd);
 
 /*
@@ -420,28 +421,28 @@ do {				\
 } while (0)
 
 static int
-kbd_hid2key(void *context, int hid_key)
+kbd_hid2key(void *context, struct hid_key hk)
 {
 
 	(void) context;		/* unused. */
 
-	if (hid_key >= xsize) {
-		printf("Invalid keycode(%d) received\n", hid_key);
+	if (hk.code >= xsize) {
+		printf("Invalid keycode(%d) received\n", hk.code);
 		return (-1);
 	}
 
-	return (x[hid_key]);
+	return (x[hk.code]);
 }
 
 static void
-kbd_write(struct kbd_dev *kd, int hid_key, int make)
+kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 {
 	int buf[32], *b, c, n;
 
 	assert(kd->kbd_tr != NULL);
 
 	/* Ignore unmapped keys. */
-	if ((c = kd->kbd_tr(kd->kbd_context, hid_key)) == -1)
+	if ((c = kd->kbd_tr(kd->kbd_context, hk)) == -1)
 		return;
 
 	n = 0;
@@ -465,7 +466,7 @@ kbd_process_keys(struct kbd_dev *kd)
 {
 	uint32_t n_mod;
 	uint32_t o_mod;
-	uint16_t key;
+	uint16_t key, up;
 	int dtime, i, j;
 
 	n_mod = kd->ndata.mod;
@@ -482,35 +483,39 @@ kbd_process_keys(struct kbd_dev *kd)
 
 	/* Check for released keys. */
 	for (i = 0; i < kd->key_cnt; i++) {
-		key = kd->odata.keycode[i];
+		key = kd->odata.keycode[i].code;
+		up = kd->odata.keycode[i].up;
 		if (key == 0) {
 			continue;
 		}
 		for (j = 0; j < kd->key_cnt; j++) {
-			if (kd->ndata.keycode[j] == 0) {
+			if (kd->ndata.keycode[j].code == 0) {
 				continue;
 			}
-			if (key == kd->ndata.keycode[j]) {
+			if (key == kd->ndata.keycode[j].code &&
+			    up == kd->ndata.keycode[j].up) {
 				goto rfound;
 			}
 		}
-		kbd_write(kd, key, 0);
+		kbd_write(kd, kd->odata.keycode[i], 0);
 	rfound:
 		;
 	}
 
 	/* Check for pressed keys. */
 	for (i = 0; i < kd->key_cnt; i++) {
-		key = kd->ndata.keycode[i];
+		key = kd->ndata.keycode[i].code;
+		up = kd->ndata.keycode[i].up;
 		if (key == 0) {
 			continue;
 		}
 		kd->ndata.time[i] = kd->now + kd->delay1;
 		for (j = 0; j < kd->key_cnt; j++) {
-			if (kd->odata.keycode[j] == 0) {
+			if (kd->odata.keycode[j].code == 0) {
 				continue;
 			}
-			if (key == kd->odata.keycode[j]) {
+			if (key == kd->odata.keycode[j].code &&
+			    up == kd->odata.keycode[j].up) {
 				/*
 				 * Key is still pressed.
 				 */
@@ -524,7 +529,7 @@ kbd_process_keys(struct kbd_dev *kd)
 				break;
 			}
 		}
-		kbd_write(kd, key, 1);
+		kbd_write(kd, kd->ndata.keycode[i], 1);
 
 		/*
                  * If any other key is presently down, force its repeat to be
@@ -622,10 +627,10 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
+	struct hid_key keycodes[MAX_KEYCODE];	
 	unsigned int usage;
 	int cnt, flags, i;
 	uint8_t mod;
-	uint16_t keycodes[MAX_KEYCODE];	
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
@@ -643,15 +648,17 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 		}
 		if (usage == HID_USAGE2(HUP_KEYBOARD, 0)) {
 			cnt = hf->hf_count;
-			for (i = 0; i < cnt; i++)
-				keycodes[i] = HID_USAGE(hf->hf_usage[i]);
+			for (i = 0; i < cnt; i++) {
+				keycodes[i].code = HID_USAGE(hf->hf_usage[i]);
+				keycodes[i].up = HUP_KEYBOARD;
+			}
 		}
 	}
 
 	if (verbose > 1) {
 		PRINT1("mod(0x%02x) key codes: ", mod);
 		for (i = 0; i < cnt; i++)
-			printf("0x%02x ", keycodes[i]);
+			printf("0x%02x ", keycodes[i].code);
 		putchar('\n');
 	}
 
@@ -659,7 +666,8 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 }
 
 void
-kbd_input(struct hid_appcol *ha, uint8_t mod, uint16_t *keycodes, int key_cnt)
+kbd_input(struct hid_appcol *ha, uint8_t mod, struct hid_key *keycodes,
+    int key_cnt)
 {
 	struct kbd_dev *kd;
 	int i;
@@ -692,7 +700,7 @@ kbd_set_context(struct hid_appcol *ha, void *context)
 }
 
 void
-kbd_set_tr(struct hid_appcol *ha, int (*tr)(void *, int))
+kbd_set_tr(struct hid_appcol *ha, int (*tr)(void *, struct hid_key))
 {
 	struct kbd_dev *kd;
 
