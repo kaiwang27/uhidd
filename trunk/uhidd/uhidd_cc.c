@@ -207,6 +207,16 @@ cc_tr(void *context, struct hid_key hk)
 	assert(hi != NULL);
 
 	/*
+	 * Some consumer controls report regular(HUP_KEYBOARD) keyboard
+	 * keys.
+	 */
+	if (hk.up == HUP_KEYBOARD)
+		return (kbd_hid2key(NULL, hk));
+
+	if (hk.up != HUP_CONSUMER)
+		return (-1);
+
+	/*
 	 * Check if there is a user provided keymap.
 	 */
 	dconfig = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
@@ -302,7 +312,6 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
-	unsigned int up;
 	int i, flags, total;
 	struct hid_key keycodes[MAX_KEYCODE];
 	uint16_t key;
@@ -329,12 +338,8 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 		flags = hid_field_get_flags(hf);
 		if (flags & HIO_CONST)
 			continue;
-		for (i = 0; i < hf->hf_count; i++) {
-			up = hid_field_get_usage_page(hf);
-			if (up != HUP_CONSUMER)
-				continue;
+		for (i = 0; i < hf->hf_count; i++)
 			total++;
-		}
 	}
 	if (total >= MAX_KEYCODE)
 		return;
@@ -385,13 +390,12 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 			continue;
 		for (i = 0; i < hf->hf_count; i++) {
 			up = hid_field_get_usage_page(hf);
-			if (up != HUP_CONSUMER)
-				continue;
 			hid_field_get_usage_value(hf, i, &usage, &value);
 			if (total >= MAX_KEYCODE)
 				continue;
 			total++;
-			if (HID_USAGE(usage) == HUG_VOLUME && value) {
+			if (up == HUP_CONSUMER &&
+			    HID_USAGE(usage) == HUG_VOLUME && value) {
 				cc_process_volume_usage(ha, hr, value);
 				continue;
 			}

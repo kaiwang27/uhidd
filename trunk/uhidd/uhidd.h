@@ -309,6 +309,7 @@ void		hid_field_set_value(struct hid_field *, int, int);
 int		hid_handle_kernel_driver(struct hid_parser *);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
+int		kbd_hid2key(void *, struct hid_key);
 void		kbd_input(struct hid_appcol *, uint8_t, struct hid_key *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
 void		kbd_set_context(struct hid_appcol *, void *);
