@@ -420,7 +420,7 @@ do {				\
 	(n) ++;			\
 } while (0)
 
-static int
+int
 kbd_hid2key(void *context, struct hid_key hk)
 {
 
