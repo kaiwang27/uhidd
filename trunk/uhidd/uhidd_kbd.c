@@ -325,52 +325,52 @@ static int32_t const	x[] =
 /* Reserved                     AD */ -1,   /* Reserved */
 /* Reserved                     AE */ -1,   /* Reserved */
 /* Reserved                     AF */ -1,   /* Reserved */
-/* Reserved                     B0 */ -1,   /* Reserved */
-/* Reserved                     B1 */ -1,   /* Reserved */
-/* Reserved                     B2 */ -1,   /* Reserved */
-/* Reserved                     B3 */ -1,   /* Reserved */
-/* Reserved                     B4 */ -1,   /* Reserved */
-/* Reserved                     B5 */ -1,   /* Reserved */
-/* Reserved                     B6 */ -1,   /* Reserved */
-/* Reserved                     B7 */ -1,   /* Reserved */
-/* Reserved                     B8 */ -1,   /* Reserved */
-/* Reserved                     B9 */ -1,   /* Reserved */
-/* Reserved                     BA */ -1,   /* Reserved */
-/* Reserved                     BB */ -1,   /* Reserved */
-/* Reserved                     BC */ -1,   /* Reserved */
-/* Reserved                     BD */ -1,   /* Reserved */
-/* Reserved                     BE */ -1,   /* Reserved */
-/* Reserved                     BF */ -1,   /* Reserved */
-/* Reserved                     C0 */ -1,   /* Reserved */
-/* Reserved                     C1 */ -1,   /* Reserved */
-/* Reserved                     C2 */ -1,   /* Reserved */
-/* Reserved                     C3 */ -1,   /* Reserved */
-/* Reserved                     C4 */ -1,   /* Reserved */
-/* Reserved                     C5 */ -1,   /* Reserved */
-/* Reserved                     C6 */ -1,   /* Reserved */
-/* Reserved                     C7 */ -1,   /* Reserved */
-/* Reserved                     C8 */ -1,   /* Reserved */
-/* Reserved                     C9 */ -1,   /* Reserved */
-/* Reserved                     CA */ -1,   /* Reserved */
-/* Reserved                     CB */ -1,   /* Reserved */
-/* Reserved                     CC */ -1,   /* Reserved */
-/* Reserved                     CD */ -1,   /* Reserved */
-/* Reserved                     CE */ -1,   /* Reserved */
-/* Reserved                     CF */ -1,   /* Reserved */
-/* Reserved                     D0 */ -1,   /* Reserved */
-/* Reserved                     D1 */ -1,   /* Reserved */
-/* Reserved                     D2 */ -1,   /* Reserved */
-/* Reserved                     D3 */ -1,   /* Reserved */
-/* Reserved                     D4 */ -1,   /* Reserved */
-/* Reserved                     D5 */ -1,   /* Reserved */
-/* Reserved                     D6 */ -1,   /* Reserved */
-/* Reserved                     D7 */ -1,   /* Reserved */
-/* Reserved                     D8 */ -1,   /* Reserved */
-/* Reserved                     D9 */ -1,   /* Reserved */
-/* Reserved                     DA */ -1,   /* Reserved */
-/* Reserved                     DB */ -1,   /* Reserved */
-/* Reserved                     DC */ -1,   /* Reserved */
-/* Reserved                     DD */ -1,   /* Reserved */
+/* Keypad 00                    B0 */ -1,   /* Unassigned */
+/* Keypad 000                   B1 */ -1,   /* Unassigned */
+/* Thousands Separator          B2 */ -1,   /* Unassigned */
+/* Decimal Separator            B3 */ -1,   /* Unassigned */
+/* Currency Unit                B4 */ -1,   /* Unassigned */
+/* Currency Sub-unit            B5 */ -1,   /* Unassigned */
+/* Keypad (                     B6 */ -1,   /* Unassigned */
+/* Keypad )                     B7 */ -1,   /* Unassigned */
+/* Keypad {                     B8 */ -1,   /* Unassigned */
+/* Keypad }                     B9 */ -1,   /* Unassigned */
+/* Keypad Tab                   BA */ -1,   /* Unassigned */
+/* Keypad Backspace             BB */ -1,   /* Unassigned */
+/* Keypad A                     BC */ -1,   /* Unassigned */
+/* Keypad B                     BD */ -1,   /* Unassigned */
+/* Keypad C                     BE */ -1,   /* Unassigned */
+/* Keypad D                     BF */ -1,   /* Unassigned */
+/* Keypad E                     C0 */ -1,   /* Unassigned */
+/* Keypad F                     C1 */ -1,   /* Unassigned */
+/* Keypad XOR                   C2 */ -1,   /* Unassigned */
+/* Keypad ^                     C3 */ -1,   /* Unassigned */
+/* Keypad %                     C4 */ -1,   /* Unassigned */
+/* Keypad <                     C5 */ -1,   /* Unassigned */
+/* Keypad >                     C6 */ -1,   /* Unassigned */
+/* Keypad &                     C7 */ -1,   /* Unassigned */
+/* Keypad &&                    C8 */ -1,   /* Unassigned */
+/* Keypad |                     C9 */ -1,   /* Unassigned */
+/* Keypad ||                    CA */ -1,   /* Unassigned */
+/* Keypad :                     CB */ -1,   /* Unassigned */
+/* Keypad #                     CC */ -1,   /* Unassigned */
+/* Keypad Space                 CD */ -1,   /* Unassigned */
+/* Keypad @                     CE */ -1,   /* Unassigned */
+/* Keypad !                     CF */ -1,   /* Unassigned */
+/* Keypad Memory Store          D0 */ -1,   /* Unassigned */
+/* Keypad Memory Recall         D1 */ -1,   /* Unassigned */
+/* Keypad Memory Clear          D2 */ -1,   /* Unassigned */
+/* Keypad Memory Add            D3 */ -1,   /* Unassigned */
+/* Keypad Memory Subtract       D4 */ -1,   /* Unassigned */
+/* Keypad Memory Multiply       D5 */ -1,   /* Unassigned */
+/* Keypad Memory Divide         D6 */ -1,   /* Unassigned */
+/* Keypad +/-                   D7 */ -1,   /* Unassigned */
+/* Keypad Clear                 D8 */ -1,   /* Unassigned */
+/* Keypad Clear Entry           D9 */ -1,   /* Unassigned */
+/* Keypad Binary                DA */ -1,   /* Unassigned */
+/* Keypad Octal                 DB */ -1,   /* Unassigned */
+/* Keypad Decimal               DC */ -1,   /* Unassigned */
+/* Keypad Hexadecimal           DD */ -1,   /* Unassigned */
 /* Reserved                     DE */ -1,   /* Reserved */
 /* Reserved                     DF */ -1,   /* Reserved */
 /* Left Control                 E0 */ 0x1D, /* 9D */
