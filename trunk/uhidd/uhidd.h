@@ -171,6 +171,11 @@ struct hid_key {
 	uint16_t code;
 };
 
+struct hid_scancode {
+	int sc;
+	int make;
+};
+
 /*
  * Configuration.
  */
@@ -309,12 +314,13 @@ void		hid_field_set_value(struct hid_field *, int, int);
 int		hid_handle_kernel_driver(struct hid_parser *);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
-int		kbd_hid2key(void *, struct hid_key, int *, int);
+int		kbd_hid2key(void *, struct hid_key, int, struct hid_scancode *,
+    int);
 void		kbd_input(struct hid_appcol *, uint8_t, struct hid_key *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
 void		kbd_set_context(struct hid_appcol *, void *);
 void		kbd_set_tr(struct hid_appcol *,
-    int (*)(void *, struct hid_key, int *, int));
+    int (*)(void *, struct hid_key, int, struct hid_scancode *, int));
 int		mouse_match(struct hid_appcol *);
 int		mouse_attach(struct hid_appcol *);
 void		mouse_recv(struct hid_appcol *, struct hid_report *);
