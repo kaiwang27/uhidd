@@ -83,51 +83,6 @@ __FBSDID("$FreeBSD$");
 #define	HUG_SCROLL_LOCK		0x0003
 
 /*
- * Keyboard device.
- */
-
-#define	MAX_KEYCODE	256
-
-struct kbd_data {
-	uint8_t mod;
-
-#define	MOD_CONTROL_L	0x01
-#define	MOD_CONTROL_R	0x10
-#define	MOD_SHIFT_L	0x02
-#define	MOD_SHIFT_R	0x20
-#define	MOD_ALT_L	0x04
-#define	MOD_ALT_R	0x40
-#define	MOD_WIN_L	0x08
-#define	MOD_WIN_R	0x80
-
-	struct hid_key keycode[MAX_KEYCODE];
-	uint32_t time[MAX_KEYCODE];
-};
-
-struct kbd_dev {
-	int vkbd_fd;
-	int key_cnt;
-	struct kbd_data ndata;
-	struct kbd_data odata;
-	pthread_t kbd_task;
-	pthread_t kbd_status_task;
-	pthread_mutex_t kbd_mtx;
-	void *kbd_context;
-	uint32_t now;
-	int delay1;
-	int delay2;
-	/* Keycode translator. */
-	int (*kbd_tr)(void *, struct hid_key, int, struct hid_scancode *, int);
-
-#define KB_DELAY1	500
-#define KB_DELAY2	100
-};
-
-#define	KBD		hc->u.kd
-#define KBD_LOCK	pthread_mutex_lock(&kd->kbd_mtx);
-#define KBD_UNLOCK	pthread_mutex_unlock(&kd->kbd_mtx);
-
-/*
  * HID code to PS/2 set 1 code translation table.
  *
  * http://www.microsoft.com/whdc/device/input/Scancode.mspx
@@ -386,6 +341,129 @@ static int32_t const	x[] =
 
 #define xsize	((int32_t)(sizeof(x)/sizeof(x[0])))
 
+/*
+ * Ordinary keypad is mapped properly by the HID to PS/2 translation
+ * table. Extended keypad (e.g. keypad = found on Apple keyboards)
+ * is supported by mapping the keypad keys to equivalent keyboard
+ * keys. Two-char/three-char keypad keys (e.g. Keypad 00, Keypad &&,
+ * etc) is simulated by pressing equivalent keyboard keys multiple
+ * times.
+ *
+ * (Note, Keypad keys like Memory Store, Clear are not supported.
+ * Also, since the keypad keys are emulated by sending modifier
+ * keys and keyboard keys, modifier key status from other keyboard(s)
+ * will cause wrong keys been generated)
+ */
+
+static struct {
+	unsigned char sym;
+	int rpt;
+} kx[] = {
+/* Keypad =                     67 */ { .sym = '=',  .rpt = 1 },
+/* Keypad 00                    B0 */ { .sym = '0',  .rpt = 2 },
+/* Keypad 000                   B1 */ { .sym = '0',  .rpt = 3 },
+/* Thousands Separator          B2 */ { .sym = '\0', .rpt = 0 },
+/* Decimal Separator            B3 */ { .sym = '\0', .rpt = 0 },
+/* Currency Unit                B4 */ { .sym = '\0', .rpt = 0 },
+/* Currency Sub-unit            B5 */ { .sym = '\0', .rpt = 0 },
+/* Keypad (                     B6 */ { .sym = '(',  .rpt = 1 },
+/* Keypad )                     B7 */ { .sym = ')',  .rpt = 1 },
+/* Keypad {                     B8 */ { .sym = '{',  .rpt = 1 },
+/* Keypad }                     B9 */ { .sym = '}',  .rpt = 1 },
+/* Keypad Tab                   BA */ { .sym = '\t', .rpt = 1 },
+/* Keypad Backspace             BB */ { .sym = '\b', .rpt = 1 },
+/* Keypad A                     BC */ { .sym = 'A',  .rpt = 1 },
+/* Keypad B                     BD */ { .sym = 'B',  .rpt = 1 },
+/* Keypad C                     BE */ { .sym = 'C',  .rpt = 1 },
+/* Keypad D                     BF */ { .sym = 'D',  .rpt = 1 },
+/* Keypad E                     C0 */ { .sym = 'E',  .rpt = 1 },
+/* Keypad F                     C1 */ { .sym = 'F',  .rpt = 1 },
+/* Keypad XOR                   C2 */ { .sym = '\0', .rpt = 0 },
+/* Keypad ^                     C3 */ { .sym = '^',  .rpt = 1 },
+/* Keypad %                     C4 */ { .sym = '%',  .rpt = 1 },
+/* Keypad <                     C5 */ { .sym = '<',  .rpt = 1 },
+/* Keypad >                     C6 */ { .sym = '>',  .rpt = 1 },
+/* Keypad &                     C7 */ { .sym = '&',  .rpt = 1 },
+/* Keypad &&                    C8 */ { .sym = '&',  .rpt = 2 },
+/* Keypad |                     C9 */ { .sym = '|',  .rpt = 1 },
+/* Keypad ||                    CA */ { .sym = '|',  .rpt = 2 },
+/* Keypad :                     CB */ { .sym = ':',  .rpt = 1 },
+/* Keypad #                     CC */ { .sym = '#',  .rpt = 1 },
+/* Keypad Space                 CD */ { .sym = ' ',  .rpt = 1 },
+/* Keypad @                     CE */ { .sym = '@',  .rpt = 1 },
+/* Keypad !                     CF */ { .sym = '!',  .rpt = 1 },
+/* Keypad Memory Store          D0 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Recall         D1 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Clear          D2 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Add            D3 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Subtract       D4 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Multiply       D5 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Memory Divide         D6 */ { .sym = '\0', .rpt = 0 },
+/* Keypad +/-                   D7 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Clear                 D8 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Clear Entry           D9 */ { .sym = '\0', .rpt = 0 },
+/* Keypad Binary                DA */ { .sym = '\0', .rpt = 0 },
+/* Keypad Octal                 DB */ { .sym = '\0', .rpt = 0 },
+/* Keypad Decimal               DC */ { .sym = '\0', .rpt = 0 },
+/* Keypad Hexadecimal           DD */ { .sym = '\0', .rpt = 0 },
+};
+
+#define kxsize	((int32_t)(sizeof(kx)/sizeof(kx[0])))
+
+/*
+ * Keyboard device.
+ */
+
+#define	MAX_KEYCODE	256
+
+struct kbd_data {
+	uint8_t mod;
+
+#define	MOD_CONTROL_L	0x01
+#define	MOD_CONTROL_R	0x10
+#define	MOD_SHIFT_L	0x02
+#define	MOD_SHIFT_R	0x20
+#define	MOD_ALT_L	0x04
+#define	MOD_ALT_R	0x40
+#define	MOD_WIN_L	0x08
+#define	MOD_WIN_R	0x80
+
+	struct hid_key keycode[MAX_KEYCODE];
+	uint32_t time[MAX_KEYCODE];
+};
+
+struct keypad_map {
+	int sc;
+	uint8_t mod;
+};
+
+struct kbd_dev {
+	int vkbd_fd;
+	int key_cnt;
+	struct kbd_data ndata;
+	struct kbd_data odata;
+	pthread_t kbd_task;
+	pthread_t kbd_status_task;
+	pthread_mutex_t kbd_mtx;
+	void *kbd_context;
+	uint32_t now;
+	int delay1;
+	int delay2;
+	keymap_t keymap;
+	struct keypad_map kpm[kxsize];
+	/* Keycode translator. */
+	int (*kbd_tr)(struct hid_appcol *, struct hid_key, int,
+	    struct hid_scancode *, int);
+	struct hid_appcol *ha;
+
+#define KB_DELAY1	500
+#define KB_DELAY2	100
+};
+
+#define	KBD		hc->u.kd
+#define KBD_LOCK	pthread_mutex_lock(&kd->kbd_mtx);
+#define KBD_UNLOCK	pthread_mutex_unlock(&kd->kbd_mtx);
+
 struct kbd_mods {
 	uint32_t mask;
 	struct hid_key key;
@@ -407,6 +485,9 @@ static void	*kbd_task(void *arg);
 static void	*kbd_status_task(void *arg);
 static void	kbd_write(struct kbd_dev *kd, struct hid_key hk, int make);
 static void	kbd_process_keys(struct kbd_dev *kd);
+static int	keypad_hid2key(struct hid_appcol *ha, struct hid_key hk,
+    int make, struct hid_scancode *c, int len);
+static void	keypad_init(struct kbd_dev *kd);
 
 /*
  * Translate HID code into PS/2 code and put codes into buffer b.
@@ -422,13 +503,14 @@ do {				\
 } while (0)
 
 int
-kbd_hid2key(void *context, struct hid_key hk, int make, struct hid_scancode *c,
-    int len)
+kbd_hid2key(struct hid_appcol *ha, struct hid_key hk, int make,
+    struct hid_scancode *c, int len)
 {
 
-	(void) context;		/* unused. */
-
 	assert(c != NULL && len > 0);
+
+	if (hk.code == 0x67 || (hk.code >= 0xB0 && hk.code <= 0xDD))
+		return (keypad_hid2key(ha, hk, make, c, len));
 
 	if (hk.code >= xsize) {
 		printf("Invalid keycode(%d) received\n", hk.code);
@@ -449,8 +531,7 @@ kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 
 	assert(kd->kbd_tr != NULL);
 
-	nk = kd->kbd_tr(kd->kbd_context, hk, make, c,
-	    sizeof(c) / sizeof(c[0]));
+	nk = kd->kbd_tr(kd->ha, hk, make, c, sizeof(c) / sizeof(c[0]));
 
 	/* Ignore unmapped keys. */
 	if (nk == 0)
@@ -487,6 +568,14 @@ kbd_process_keys(struct kbd_dev *kd)
 	uint32_t o_mod;
 	uint16_t key, up;
 	int dtime, i, j;
+
+	/*
+	 * TODO: The code can not detect modifier key status from other
+	 * keyboard(s). One possible future improvement is:
+	 * If the keypad key is generated by a comsuer controller,
+	 * we should use the modfier key status from the keyboard interface
+	 * instead, if it's us not ukbd(4) handling the keyboard interface.
+	 */
 
 	n_mod = kd->ndata.mod;
 	o_mod = kd->odata.mod;
@@ -602,13 +691,14 @@ kbd_attach(struct hid_appcol *ha)
 	}
 
 	hid_appcol_set_private(ha, kd);
+	kd->ha = ha;
 
 	/* Open /dev/vkbdctl. */
 	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl: %m",
 		    basename(hi->dev), hi->ndx);
 		if (verbose && errno == ENOENT)
-			PRINT1("vkbd.ko kernel module not loaded?\n")
+			PRINT1("vkbd.ko kernel module not loaded?\n");
 		return (-1);
 	}
 
@@ -620,6 +710,19 @@ kbd_attach(struct hid_appcol *ha)
 		}
 		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 	}
+
+	/* Retrieve keyboard keymap. (used for Keypad support) */
+	if (ioctl(kd->vkbd_fd, GIO_KEYMAP, &kd->keymap) < 0) {
+		syslog(LOG_ERR, "%s [%d] ioctl failed: %m",
+		    basename(hi->dev), hi->ndx);
+		PRINT1("failed to retrieve keymap");
+	}
+
+	/*
+	 * Search the currently installed keymap for the scancodes to which
+	 * we should map the extended keypad keys.
+	 */
+	keypad_init(kd);
 
 	/* TODO: These should be tunable. */
 	kd->delay1 = KB_DELAY1;
@@ -708,19 +811,7 @@ kbd_input(struct hid_appcol *ha, uint8_t mod, struct hid_key *keycodes,
 }
 
 void
-kbd_set_context(struct hid_appcol *ha, void *context)
-{
-	struct kbd_dev *kd;
-
-	kd = hid_appcol_get_private(ha);
-	assert(kd != NULL);
-
-	kd->kbd_context = context;
-}
-
-void
-kbd_set_tr(struct hid_appcol *ha,
-    int (*tr)(void *, struct hid_key, int, struct hid_scancode *, int))
+kbd_set_tr(struct hid_appcol *ha, hid_translator tr)
 {
 	struct kbd_dev *kd;
 
@@ -830,4 +921,183 @@ kbd_status_task(void *arg)
 	}
 
 	return (NULL);
+}
+
+#undef PUTSC
+#define PUTSC(s, m, n, b)	\
+do {				\
+	if (n >= len)		\
+		break;		\
+	(b)->sc = (s);		\
+	(b)->make = m;		\
+	(b) ++;			\
+	(n) ++;			\
+} while(0)
+
+static int
+keypad_hid2key(struct hid_appcol *ha, struct hid_key hk, int make,
+    struct hid_scancode *c, int len)
+{
+	struct hid_scancode *buf;
+	struct kbd_dev *kd;
+	uint32_t n_mod;
+	uint32_t o_mod;
+	int i, kc, nk;
+
+	kd = hid_appcol_get_private(ha);
+	assert(kd != NULL);
+
+	assert(c != NULL && len > 0);
+	assert(hk.code == 0x67 || (hk.code >= 0xB0 && hk.code <= 0xDD));
+
+	if (hk.code == 0x67)
+		kc = 0;
+	else
+		kc = hk.code - 0xAF;
+
+	if (kc < 0 || kc >= kxsize) {
+		printf("Invalid keypad code(%d) received\n", hk.code);
+		return (0);
+	}
+
+	/* Ignore unsupported keypad keys. */
+	if (kx[kc].sym == '\0' || kx[kc].rpt == 0)
+		return (0);
+
+	/* Ignore keypad keys that are not mapped. */
+	if (kd->kpm[kc].sc == 0)
+		return (0);
+
+	nk = 0;
+	buf = c;
+
+	n_mod = kd->kpm[kc].mod;
+	o_mod = kd->ndata.mod;
+
+	if (make) {
+		/*
+		 * Press/Release the mod keys needed to produce the
+		 * keypad key.
+		 */
+		if (n_mod != o_mod) {
+			for (i = 0; i < KBD_NMOD; i++) {
+				if ((n_mod & kbd_mods[i].mask) !=
+				    (o_mod & kbd_mods[i].mask)) {
+					PUTSC(x[kbd_mods[i].key.code],
+					    (n_mod & kbd_mods[i].mask), nk,
+					    buf);
+				}
+
+			}
+		}
+
+		/* Press the keypad key. */
+		for (i = 0; i < kx[kc].rpt; i++)
+			PUTSC(kd->kpm[kc].sc, 1, nk, buf);
+
+	} else {
+
+		/* Release the keypad key. */
+		PUTSC(kd->kpm[kc].sc, 0, nk, buf);
+
+		/* Restore the previous mod keys state. */
+		if (n_mod != o_mod) {
+			for (i = 0; i < KBD_NMOD; i++) {
+				if ((n_mod & kbd_mods[i].mask) !=
+				    (o_mod & kbd_mods[i].mask)) {
+					PUTSC(x[kbd_mods[i].key.code],
+					    (o_mod & kbd_mods[i].mask), nk,
+					    buf);
+				}
+
+			}
+		}
+	}
+	
+	return (nk);
+}
+
+static void
+keypad_init(struct kbd_dev *kd)
+{
+	struct hid_interface *hi;
+	struct hid_appcol *ha;
+	int i, j, k;
+
+	ha = kd->ha;
+	assert(ha != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
+
+	if (kd->keymap.n_keys == 0)
+		return;
+
+	for (i = 0; i < kxsize; i++) {
+		if (kx[i].sym == '\0')
+			continue;
+		if (i > 0 && kx[i].sym == kx[i - 1].sym) {
+			kd->kpm[i] = kd->kpm[i - 1];
+			continue;
+		}
+		for (j = 0; j < kd->keymap.n_keys; j++) {
+			for (k = 0; k < NUM_STATES; k++) {
+				if (kd->keymap.key[j].map[k] == kx[i].sym) {
+					kd->kpm[i].sc = j;
+					switch (k) {
+					case 0:
+						kd->kpm[i].mod = 0;
+						break;
+					case 1:
+						kd->kpm[i].mod = MOD_SHIFT_L;
+						break;
+					case 2:
+						kd->kpm[i].mod = MOD_CONTROL_L;
+						break;
+					case 3:
+						kd->kpm[i].mod = MOD_SHIFT_L |
+							MOD_CONTROL_L;
+						break;
+					case 4:
+						kd->kpm[i].mod = MOD_ALT_L;
+						break;
+					case 5:
+						kd->kpm[i].mod = MOD_ALT_L |
+							MOD_SHIFT_L;
+						break;
+					case 6:
+						kd->kpm[i].mod = MOD_ALT_L |
+							MOD_CONTROL_L;
+						break;
+					case 7:
+						kd->kpm[i].mod = MOD_ALT_L |
+							MOD_CONTROL_L |
+							MOD_SHIFT_L;
+						break;
+					default:
+						/* What? */
+						kd->kpm[i].mod = 0;
+						break;
+					}
+					goto next_key;
+				}
+			}
+		}
+
+	next_key:
+		if (verbose > 2) {
+			if (kx[i].sym == '\t')
+				PRINT1("keypad '%s' mapped to scancode %d mod"
+				    " 0x%02x\n", "\\t", kd->kpm[i].sc,
+				    kd->kpm[i].mod);
+			else if (kx[i].sym == '\b')
+				PRINT1("keypad '%s' mapped to scancode %d mod"
+				    " 0x%02x\n", "\\b", kd->kpm[i].sc,
+				    kd->kpm[i].mod);
+			else				
+				PRINT1("keypad '%c' mapped to scancode %d mod"
+				    " 0x%02x\n", kx[i].sym, kd->kpm[i].sc,
+				    kd->kpm[i].mod);
+		}
+
+	}
 }

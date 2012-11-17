@@ -176,6 +176,9 @@ struct hid_scancode {
 	int make;
 };
 
+typedef int (*hid_translator)(struct hid_appcol *, struct hid_key, int,
+    struct hid_scancode *, int);
+
 /*
  * Configuration.
  */
@@ -242,7 +245,7 @@ struct hid_interface {
 		snprintf(pb, sizeof(pb), "%s[%d]", basename(d), n);	\
 		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
 		printf("%s-> %s", pb, pb2);				\
-	} while (0);
+	} while (0)
 
 #define PRINT1(...)							\
 	do {								\
@@ -252,7 +255,7 @@ struct hid_interface {
 		    hi->ndx);						\
 		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
 		printf("%s-> %s", pb, pb2);				\
-	} while (0);
+	} while (0)
 
 /*
  * Globals.
@@ -314,13 +317,11 @@ void		hid_field_set_value(struct hid_field *, int, int);
 int		hid_handle_kernel_driver(struct hid_parser *);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
-int		kbd_hid2key(void *, struct hid_key, int, struct hid_scancode *,
-    int);
+int		kbd_hid2key(struct hid_appcol *, struct hid_key, int,
+    struct hid_scancode *, int);
 void		kbd_input(struct hid_appcol *, uint8_t, struct hid_key *, int);
 void		kbd_recv(struct hid_appcol *, struct hid_report *);
-void		kbd_set_context(struct hid_appcol *, void *);
-void		kbd_set_tr(struct hid_appcol *,
-    int (*)(void *, struct hid_key, int, struct hid_scancode *, int));
+void		kbd_set_tr(struct hid_appcol *, hid_translator);
 int		mouse_match(struct hid_appcol *);
 int		mouse_attach(struct hid_appcol *);
 void		mouse_recv(struct hid_appcol *, struct hid_report *);
