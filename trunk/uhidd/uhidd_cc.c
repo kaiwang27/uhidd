@@ -198,10 +198,12 @@ cc_write_keymap_file(struct hid_interface *hi)
 }
 
 static int
-cc_tr(void *context, struct hid_key hk)
+cc_tr(void *context, struct hid_key hk, int *c, int len)
 {
 	struct hid_interface *hi;
 	struct device_config *dconfig;
+
+	assert(c != NULL && len > 0);
 
 	hi = context;
 	assert(hi != NULL);
@@ -211,33 +213,37 @@ cc_tr(void *context, struct hid_key hk)
 	 * keys.
 	 */
 	if (hk.up == HUP_KEYBOARD)
-		return (kbd_hid2key(NULL, hk));
+		return (kbd_hid2key(NULL, hk, c, len));
 
 	if (hk.up != HUP_CONSUMER)
-		return (-1);
+		return (0);
 
 	/*
 	 * Check if there is a user provided keymap.
 	 */
 	dconfig = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dconfig != NULL && dconfig->cc_keymap_set) {
-		if (dconfig->cc_keymap[hk.code] != 0)
-			return (dconfig->cc_keymap[hk.code]);
-		else
-			return (-1);
+		if (dconfig->cc_keymap[hk.code] != 0) {
+			*c = dconfig->cc_keymap[hk.code];
+			return (1);
+		} else
+			return (0);
 	}
 	if (uconfig.gconfig.cc_keymap_set) {
-		if (uconfig.gconfig.cc_keymap[hk.code] != 0)
-			return (uconfig.gconfig.cc_keymap[hk.code]);
-		else
-			return (-1);
+		if (uconfig.gconfig.cc_keymap[hk.code] != 0) {
+			*c = uconfig.gconfig.cc_keymap[hk.code];
+			return (1);
+		} else
+			return (0);
 	}
 
 	/*
 	 * Check if there is a key translation in the in-memory keymap.
 	 */
-	if (hi->cc_keymap[hk.code] != 0)
-		return (hi->cc_keymap[hk.code]);
+	if (hi->cc_keymap[hk.code] != 0) {
+		*c = hi->cc_keymap[hk.code];
+		return (1);
+	}
 
 	/*
 	 * Try allocating a free key for this "HID key".
@@ -249,11 +255,12 @@ cc_tr(void *context, struct hid_key hk)
 		if (verbose)
 			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
 			    hk.code, hi->cc_keymap[hk.code]);
-		return (hi->cc_keymap[hk.code]);
+		*c = hi->cc_keymap[hk.code];
+		return (1);
 	} else {
 		if (verbose)
 			PRINT1("no more free key for hid key: 0x%x\n", hk.code);
-		return (-1);
+		return (0);
 	}
 }
 
