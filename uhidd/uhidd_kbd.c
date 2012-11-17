@@ -117,7 +117,7 @@ struct kbd_dev {
 	int delay1;
 	int delay2;
 	/* Keycode translator. */
-	int (*kbd_tr)(void *, struct hid_key, int *, int);
+	int (*kbd_tr)(void *, struct hid_key, int, struct hid_scancode *, int);
 
 #define KB_DELAY1	500
 #define KB_DELAY2	100
@@ -422,7 +422,8 @@ do {				\
 } while (0)
 
 int
-kbd_hid2key(void *context, struct hid_key hk, int *c, int len)
+kbd_hid2key(void *context, struct hid_key hk, int make, struct hid_scancode *c,
+    int len)
 {
 
 	(void) context;		/* unused. */
@@ -434,18 +435,22 @@ kbd_hid2key(void *context, struct hid_key hk, int *c, int len)
 		return (0);
 	}
 
-	*c = x[hk.code];
+	(*c).sc = x[hk.code];
+	(*c).make = make;
+
 	return (1);
 }
 
 static void
 kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 {
-	int buf[32], *b, c[8], i, n, nk;
+	struct hid_scancode c[8];
+	int buf[32], *b, i, n, nk;
 
 	assert(kd->kbd_tr != NULL);
 
-	nk = kd->kbd_tr(kd->kbd_context, hk, c, sizeof(c) / sizeof(c[0]));
+	nk = kd->kbd_tr(kd->kbd_context, hk, make, c,
+	    sizeof(c) / sizeof(c[0]));
 
 	/* Ignore unmapped keys. */
 	if (nk == 0)
@@ -460,14 +465,14 @@ kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 			    " %d keys discarded", nk - i);
 			break;
 		}
-		if (make) {
-			if (c[i] & E0PREFIX)
+		if (c[i].make) {
+			if (c[i].sc & E0PREFIX)
 				PUT(0xe0, n, b);
-			PUT((c[i] & CODEMASK), n, b);
-		} else if (!(c[i] & NOBREAK)) {
-			if (c[i] & E0PREFIX)
+			PUT((c[i].sc & CODEMASK), n, b);
+		} else if (!(c[i].sc & NOBREAK)) {
+			if (c[i].sc & E0PREFIX)
 				PUT(0xe0, n, b);
-			PUT((0x80|(c[i] & CODEMASK)), n, b);
+			PUT((0x80|(c[i].sc & CODEMASK)), n, b);
 		}
 	}
 
@@ -715,7 +720,7 @@ kbd_set_context(struct hid_appcol *ha, void *context)
 
 void
 kbd_set_tr(struct hid_appcol *ha,
-    int (*tr)(void *, struct hid_key, int *, int))
+    int (*tr)(void *, struct hid_key, int, struct hid_scancode *, int))
 {
 	struct kbd_dev *kd;
 

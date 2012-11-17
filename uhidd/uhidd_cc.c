@@ -198,7 +198,8 @@ cc_write_keymap_file(struct hid_interface *hi)
 }
 
 static int
-cc_tr(void *context, struct hid_key hk, int *c, int len)
+cc_tr(void *context, struct hid_key hk, int make, struct hid_scancode *c,
+    int len)
 {
 	struct hid_interface *hi;
 	struct device_config *dconfig;
@@ -213,10 +214,12 @@ cc_tr(void *context, struct hid_key hk, int *c, int len)
 	 * keys.
 	 */
 	if (hk.up == HUP_KEYBOARD)
-		return (kbd_hid2key(NULL, hk, c, len));
+		return (kbd_hid2key(NULL, hk, make, c, len));
 
 	if (hk.up != HUP_CONSUMER)
 		return (0);
+
+	(*c).make = make;
 
 	/*
 	 * Check if there is a user provided keymap.
@@ -224,14 +227,14 @@ cc_tr(void *context, struct hid_key hk, int *c, int len)
 	dconfig = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
 	if (dconfig != NULL && dconfig->cc_keymap_set) {
 		if (dconfig->cc_keymap[hk.code] != 0) {
-			*c = dconfig->cc_keymap[hk.code];
+			(*c).sc = dconfig->cc_keymap[hk.code];
 			return (1);
 		} else
 			return (0);
 	}
 	if (uconfig.gconfig.cc_keymap_set) {
 		if (uconfig.gconfig.cc_keymap[hk.code] != 0) {
-			*c = uconfig.gconfig.cc_keymap[hk.code];
+			(*c).sc = uconfig.gconfig.cc_keymap[hk.code];
 			return (1);
 		} else
 			return (0);
@@ -241,7 +244,7 @@ cc_tr(void *context, struct hid_key hk, int *c, int len)
 	 * Check if there is a key translation in the in-memory keymap.
 	 */
 	if (hi->cc_keymap[hk.code] != 0) {
-		*c = hi->cc_keymap[hk.code];
+		(*c).sc = hi->cc_keymap[hk.code];
 		return (1);
 	}
 
@@ -255,7 +258,7 @@ cc_tr(void *context, struct hid_key hk, int *c, int len)
 		if (verbose)
 			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
 			    hk.code, hi->cc_keymap[hk.code]);
-		*c = hi->cc_keymap[hk.code];
+		(*c).sc = hi->cc_keymap[hk.code];
 		return (1);
 	} else {
 		if (verbose)
