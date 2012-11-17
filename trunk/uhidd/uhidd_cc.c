@@ -198,15 +198,15 @@ cc_write_keymap_file(struct hid_interface *hi)
 }
 
 static int
-cc_tr(void *context, struct hid_key hk, int make, struct hid_scancode *c,
-    int len)
+cc_tr(struct hid_appcol *ha, struct hid_key hk, int make,
+    struct hid_scancode *c, int len)
 {
 	struct hid_interface *hi;
 	struct device_config *dconfig;
 
 	assert(c != NULL && len > 0);
 
-	hi = context;
+	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 
 	/*
@@ -214,7 +214,7 @@ cc_tr(void *context, struct hid_key hk, int make, struct hid_scancode *c,
 	 * keys.
 	 */
 	if (hk.up == HUP_KEYBOARD)
-		return (kbd_hid2key(NULL, hk, make, c, len));
+		return (kbd_hid2key(ha, hk, make, c, len));
 
 	if (hk.up != HUP_CONSUMER)
 		return (0);
@@ -309,7 +309,6 @@ cc_attach(struct hid_appcol *ha)
 
 	if (kbd_attach(ha) < 0)
 		return (-1);
-	kbd_set_context(ha, hi);
 	kbd_set_tr(ha, cc_tr);
 
 	return (0);

@@ -543,7 +543,7 @@ hid_handle_kernel_driver(struct hid_parser *hp)
 			PRINT1("Please try running uhidd with option '-u' to "
 			    "detach the kernel drivers\n");
 			PRINT1("or specify option '-U' to force attaching the"
-			    " interface\n")
+			    " interface\n");
 			return (-1);
 		}
 	}
