@@ -116,7 +116,8 @@ struct kbd_dev {
 	uint32_t now;
 	int delay1;
 	int delay2;
-	int (*kbd_tr)(void *, struct hid_key); /* Keycode translator. */
+	/* Keycode translator. */
+	int (*kbd_tr)(void *, struct hid_key, int *, int);
 
 #define KB_DELAY1	500
 #define KB_DELAY2	100
@@ -421,40 +422,53 @@ do {				\
 } while (0)
 
 int
-kbd_hid2key(void *context, struct hid_key hk)
+kbd_hid2key(void *context, struct hid_key hk, int *c, int len)
 {
 
 	(void) context;		/* unused. */
 
+	assert(c != NULL && len > 0);
+
 	if (hk.code >= xsize) {
 		printf("Invalid keycode(%d) received\n", hk.code);
-		return (-1);
+		return (0);
 	}
 
-	return (x[hk.code]);
+	*c = x[hk.code];
+	return (1);
 }
 
 static void
 kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 {
-	int buf[32], *b, c, n;
+	int buf[32], *b, c[8], i, n, nk;
 
 	assert(kd->kbd_tr != NULL);
 
+	nk = kd->kbd_tr(kd->kbd_context, hk, c, sizeof(c) / sizeof(c[0]));
+
 	/* Ignore unmapped keys. */
-	if ((c = kd->kbd_tr(kd->kbd_context, hk)) == -1)
+	if (nk == 0)
 		return;
 
 	n = 0;
 	b = buf;
-	if (make) {
-		if (c & E0PREFIX)
-			PUT(0xe0, n, b);
-		PUT((c & CODEMASK), n, b);
-	} else if (!(c & NOBREAK)) {
-		if (c & E0PREFIX)
-			PUT(0xe0, n, b);
-		PUT((0x80|(c & CODEMASK)), n, b);
+	for (i = 0; i < nk; i++) {
+		if ((size_t) n >= sizeof(buf) / sizeof(buf[0])) {
+			syslog(LOG_ERR,
+			    "Internal: not enough key input buffer,"
+			    " %d keys discarded", nk - i);
+			break;
+		}
+		if (make) {
+			if (c[i] & E0PREFIX)
+				PUT(0xe0, n, b);
+			PUT((c[i] & CODEMASK), n, b);
+		} else if (!(c[i] & NOBREAK)) {
+			if (c[i] & E0PREFIX)
+				PUT(0xe0, n, b);
+			PUT((0x80|(c[i] & CODEMASK)), n, b);
+		}
 	}
 
 	if (n > 0)
@@ -700,7 +714,8 @@ kbd_set_context(struct hid_appcol *ha, void *context)
 }
 
 void
-kbd_set_tr(struct hid_appcol *ha, int (*tr)(void *, struct hid_key))
+kbd_set_tr(struct hid_appcol *ha,
+    int (*tr)(void *, struct hid_key, int *, int))
 {
 	struct kbd_dev *kd;
 
