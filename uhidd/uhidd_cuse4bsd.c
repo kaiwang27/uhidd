@@ -29,7 +29,11 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/wait.h>
+#if __FreeBSD_version >= 1100023
+#include <cuse.h>
+#else
 #include <cuse4bsd.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -71,7 +75,11 @@ ucuse_init_again:
 			if (verbose)
 				syslog(LOG_INFO, "Attempt to load kernel"
 				    " module cuse4bsd.ko...");
+#if __FreeBSD_version >= 1100023
+			status = system("kldload cuse");
+#else
 			status = system("kldload cuse4bsd");
+#endif
 			if (WEXITSTATUS(status) != 0) {
 				syslog(LOG_ERR, "Failed to load cuse4bsd"
 				    " kernel module");

@@ -36,7 +36,11 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <string.h>
 #include <syslog.h>
+#if __FreeBSD_version >= 1100023
+#include <cuse.h>
+#else
 #include <cuse4bsd.h>
+#endif
 #include "uhidd.h"
 
 /*
