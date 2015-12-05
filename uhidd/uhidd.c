@@ -368,9 +368,9 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_interface *hi;
 	struct libusb20_endpoint *ep;
-	unsigned char rdesc[16384];
+	unsigned char rdesc[16384], buf[64];
 	int desc, ds, e, j, pos, size;
-	uint16_t actlen;
+	uint16_t actlen, buflen;
 
 	/*
 	 * Get report descriptor.
@@ -420,6 +420,73 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 		dump_report_desc(rdesc, actlen);
 	}
 
+	/*
+	 * Make sure the interface is in report protocol mode. If it's set in
+	 * boot protocol mode, it's likely that the HID device will only output
+	 * standard(basic) reports that're understood by the BIOS. For example,
+	 * if a keyboard is set in boot protocol mode, it probably will disable
+	 * multimedia key report output on its second interface.
+	 *
+	 * Also note, according to the HID spec, only boot device support this
+	 * feature, so make sure we check the interface subclass before doing
+	 * requets.
+	 */
+	if (iface->desc.bInterfaceSubClass == 1) {
+		LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
+		req.bmRequestType = LIBUSB20_ENDPOINT_IN |
+			LIBUSB20_REQUEST_TYPE_CLASS |
+			LIBUSB20_RECIPIENT_INTERFACE;
+		req.bRequest = 0x03; /* GET_PROTOCOL */
+		req.wValue = 0;
+		req.wIndex = ndx;
+		req.wLength = 1;
+		e = libusb20_dev_request_sync(pdev, &req, buf, &buflen, 0, 0);
+		if (e) {
+			syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
+			    " failed", basename(dev), ndx);
+			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed",
+			    basename(dev), ndx);
+			goto alloc_parent;
+		}
+		if (buflen != 1) {
+			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed: "
+			    "buflen != 1", basename(dev), ndx);
+			goto alloc_parent;
+		}
+		if (buf[0] == 1) {
+			if (verbose)
+				PRINT0(dev, ndx, "Interface is in Report "
+				    "Protocol Mode\n");
+			goto alloc_parent;
+		}
+		if (buf[0] != 0) {
+			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed: "
+			    "invalid data: %u", basename(dev), ndx,
+			    (unsigned) buf[0]);
+			goto alloc_parent;
+		}
+		PRINT0(dev, ndx, "Interface is in Boot Protocol Mode, "
+		    "attempt to switch to Report Protocol Mode...\n");
+		LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
+		req.bmRequestType = LIBUSB20_ENDPOINT_OUT |
+			LIBUSB20_REQUEST_TYPE_CLASS |
+			LIBUSB20_RECIPIENT_INTERFACE;
+		req.bRequest = 0x0B; /* SET_PROTOCOL */
+		req.wValue = 1;
+		req.wIndex = ndx;
+		req.wLength = 0;
+		e = libusb20_dev_request_sync(pdev, &req, NULL, NULL, 0, 0);
+		if (e) {
+			syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
+			    " failed", basename(dev), ndx);
+			syslog(LOG_ERR, "%s[%d]=> SET_PROTOCOL failed",
+			    basename(dev), ndx);
+			goto alloc_parent;
+		}
+		PRINT0(dev, ndx, "Interface SET_PROTOCOL ok.\n");
+	}
+
+alloc_parent:
 	/*
 	 * Allocate a hid parent device.
 	 */
