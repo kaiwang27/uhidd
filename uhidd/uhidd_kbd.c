@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010, 2012 Kai Wang
+ * Copyright (c) 2009, 2010, 2012, 2015 Kai Wang
  * All rights reserved.
  * Copyright (c) 2006 Maksim Yevmenkin <m_evmenkin@yahoo.com>
  * All rights reserved.
@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 
 #include "uhidd.h"
+#include "kbdmap_lex.h"
 
 #define	HUG_NUM_LOCK		0x0001
 #define	HUG_CAPS_LOCK		0x0002
@@ -435,6 +436,7 @@ struct kbd_data {
 struct keypad_map {
 	int sc;
 	uint8_t mod;
+	uint8_t state;
 };
 
 struct kbd_dev {
@@ -449,7 +451,6 @@ struct kbd_dev {
 	uint32_t now;
 	int delay1;
 	int delay2;
-	keymap_t keymap;
 	struct keypad_map kpm[kxsize];
 	/* Keycode translator. */
 	int (*kbd_tr)(struct hid_appcol *, struct hid_key, int,
@@ -703,13 +704,6 @@ kbd_attach(struct hid_appcol *ha)
 		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
 	}
 
-	/* Retrieve keyboard keymap. (used for Keypad support) */
-	if (ioctl(kd->vkbd_fd, GIO_KEYMAP, &kd->keymap) < 0) {
-		syslog(LOG_ERR, "%s [%d] ioctl failed: %m",
-		    basename(hi->dev), hi->ndx);
-		PRINT1("failed to retrieve keymap");
-	}
-
 	/*
 	 * Search the currently installed keymap for the scancodes to which
 	 * we should map the extended keypad keys.
@@ -741,7 +735,7 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
-	struct hid_key keycodes[MAX_KEYCODE];	
+	struct hid_key keycodes[MAX_KEYCODE];
 	unsigned int usage;
 	int cnt, flags, i;
 	uint8_t mod;
@@ -1013,78 +1007,81 @@ keypad_hid2key(struct hid_appcol *ha, struct hid_key hk, int make,
 			}
 		}
 	}
-	
+
 	return (nk);
 }
 
-static void
-keypad_init(struct kbd_dev *kd)
+#define KEYMAP_PATH1 "/usr/share/syscons/keymaps"
+#define KEYMAP_PATH2 "/usr/share/vt/keymaps"
+
+int kbdmap_number;
+char kbdmap_letter;
+
+static int
+keypad_search_key(struct kbd_dev *kd, int sc, int state, char letter)
 {
 	struct hid_interface *hi;
 	struct hid_appcol *ha;
-	int i, j, k;
+	int i, found, pr;
 
 	ha = kd->ha;
 	assert(ha != NULL);
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 
-	if (kd->keymap.n_keys == 0)
-		return;
-
+	found = pr = 0;
 	for (i = 0; i < kxsize; i++) {
 		if (kx[i].sym == '\0')
 			continue;
-		if (i > 0 && kx[i].sym == kx[i - 1].sym) {
-			kd->kpm[i] = kd->kpm[i - 1];
+
+		if (kx[i].sym != (unsigned char) letter)
 			continue;
-		}
-		for (j = 0; j < kd->keymap.n_keys; j++) {
-			for (k = 0; k < NUM_STATES; k++) {
-				if (kd->keymap.key[j].map[k] == kx[i].sym) {
-					kd->kpm[i].sc = j;
-					switch (k) {
-					case 0:
-						kd->kpm[i].mod = 0;
-						break;
-					case 1:
-						kd->kpm[i].mod = MOD_SHIFT_L;
-						break;
-					case 2:
-						kd->kpm[i].mod = MOD_CONTROL_L;
-						break;
-					case 3:
-						kd->kpm[i].mod = MOD_SHIFT_L |
-							MOD_CONTROL_L;
-						break;
-					case 4:
-						kd->kpm[i].mod = MOD_ALT_L;
-						break;
-					case 5:
-						kd->kpm[i].mod = MOD_ALT_L |
-							MOD_SHIFT_L;
-						break;
-					case 6:
-						kd->kpm[i].mod = MOD_ALT_L |
-							MOD_CONTROL_L;
-						break;
-					case 7:
-						kd->kpm[i].mod = MOD_ALT_L |
-							MOD_CONTROL_L |
-							MOD_SHIFT_L;
-						break;
-					default:
-						/* What? */
-						kd->kpm[i].mod = 0;
-						break;
-					}
-					goto next_key;
-				}
-			}
+
+		/*
+		 * Prefer the one without modifiers or less modifiers,
+		 * if found multiple mappings for the same letter.
+		 * FIXME Could be wrong here.
+		 */
+		if (kd->kpm[i].sc != 0 && state >= (int) kd->kpm[i].state)
+			continue;
+
+		found = 1;
+		kd->kpm[i].sc = sc;
+		kd->kpm[i].state = (uint8_t) state;
+		switch (state) {
+		case 0:
+			kd->kpm[i].mod = 0;
+			break;
+		case 1:
+			kd->kpm[i].mod = MOD_SHIFT_L;
+			break;
+		case 2:
+			kd->kpm[i].mod = MOD_CONTROL_L;
+			break;
+		case 3:
+			kd->kpm[i].mod = MOD_SHIFT_L | MOD_CONTROL_L;
+			break;
+		case 4:
+			kd->kpm[i].mod = MOD_ALT_L;
+			break;
+		case 5:
+			kd->kpm[i].mod = MOD_ALT_L | MOD_SHIFT_L;
+			break;
+		case 6:
+			kd->kpm[i].mod = MOD_ALT_L | MOD_CONTROL_L;
+			break;
+		case 7:
+			kd->kpm[i].mod = MOD_ALT_L | MOD_CONTROL_L |
+				MOD_SHIFT_L;
+			break;
+		default:
+			/* What? */
+			kd->kpm[i].mod = 0;
+			break;
 		}
 
-	next_key:
-		if (verbose > 2) {
+		if (verbose > 2 && !pr) {
+			pr = 1;
 			if (kx[i].sym == '\t')
 				PRINT1("keypad '%s' mapped to scancode %d mod"
 				    " 0x%02x\n", "\\t", kd->kpm[i].sc,
@@ -1093,11 +1090,171 @@ keypad_init(struct kbd_dev *kd)
 				PRINT1("keypad '%s' mapped to scancode %d mod"
 				    " 0x%02x\n", "\\b", kd->kpm[i].sc,
 				    kd->kpm[i].mod);
-			else				
+			else
 				PRINT1("keypad '%c' mapped to scancode %d mod"
 				    " 0x%02x\n", kx[i].sym, kd->kpm[i].sc,
 				    kd->kpm[i].mod);
 		}
-
 	}
+
+	return (found);
+}
+
+static int
+keypad_parse_keymap(struct kbd_dev *kd, const char *keymap_file)
+{
+	struct hid_interface *hi;
+	struct hid_appcol *ha;
+	int token, i, sc, cnt, found;
+
+	ha = kd->ha;
+	assert(ha != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
+
+	if ((kbdmapin = fopen(keymap_file, "r")) == NULL) {
+		if (verbose > 2)
+			PRINT1("could not open %s", keymap_file);
+		return (-1);
+	}
+
+	cnt = 0;
+	for (;;) {
+		token = kbdmaplex();
+		if (token == 0)
+			break;
+		if (token == TNEWLINE)
+			continue;
+
+		/* Only interested in key definition line. */
+		if (token != TNUM) {
+			for (;;) {
+				token = kbdmaplex();
+				if (token == 0)
+					goto parse_done;
+				if (token == TNEWLINE)
+					break;
+			}
+		}
+
+		/* Parse the line. */
+		sc = kbdmap_number;
+		if (sc < 0 || sc >= NUM_KEYS)
+			break;
+		found = 0;
+		for (i = 0; i < NUM_STATES; i++) {
+			token = kbdmaplex();
+			if (token == 0)
+				goto parse_done;
+			if (token == TNEWLINE)
+				break;
+			if (token != TLET)
+				continue;
+			found = keypad_search_key(kd, sc, i, kbdmap_letter);
+			if (found)
+				cnt++;
+		}
+		if ((token = kbdmaplex()) != TFLAG)
+			break;
+	}
+
+parse_done:
+	fclose(kbdmapin);
+
+	return (cnt);
+}
+
+static void
+keypad_init(struct kbd_dev *kd)
+{
+	struct hid_interface *hi;
+	struct hid_appcol *ha;
+	struct stat sb;
+	char buf[1024], mapfile[64];
+	FILE *fp;
+	int c, found;
+
+	ha = kd->ha;
+	assert(ha != NULL);
+	hi = hid_appcol_get_parser_private(ha);
+	assert(hi != NULL);
+
+	/*
+	 * In order to simulate the right key press with non-English
+	 * keyboards, we load the keymap the user configures in /etc/rc.conf,
+	 * and find the corresponding scancodes and modifiers for all
+	 * the keypad keys.
+	 */
+
+	found = 0;
+	snprintf(buf, sizeof(buf), "grep -m 1 keymap /etc/rc.conf |"
+	    " cut -d'=' -f 2 | tr -d '\\040\\042\\011\\012\\015'");
+	if ((fp = popen(buf, "r")) != NULL) {
+		if ((c = fread(mapfile, 1, sizeof(mapfile) - 1, fp)) > 1) {
+			mapfile[c] = '\0';
+			if (verbose > 2)
+				PRINT1("searching for keymap %s\n", mapfile);
+			snprintf(buf, sizeof(buf), "%s/%s", KEYMAP_PATH1,
+			    mapfile);
+			if (stat(buf, &sb) == 0) {
+				found = 1;
+				goto parse_keymap;
+			}
+			snprintf(buf, sizeof(buf), "%s/%s", KEYMAP_PATH2,
+			    mapfile);
+			if (stat(buf, &sb) == 0) {
+				found = 1;
+				goto parse_keymap;
+			}
+			if (verbose > 2)
+				PRINT1("keymap %s not exist\n", mapfile);
+		}
+	}
+
+parse_keymap:
+
+	if (fp != NULL)
+		pclose(fp);
+
+	if (found) {
+		c = keypad_parse_keymap(kd, buf);
+		if (c > 0) {
+			if (verbose > 2)
+				PRINT1("found %d keys for keymap\n", c);
+			return;
+		}
+	}
+
+	/* Use the default keymap for English keyboard. */
+	if (verbose > 2)
+		PRINT1("keypad uses default keymap for English keyboard\n");
+
+	kd->kpm[0].sc = 0x0D; kd->kpm[0].mod = 0;		/* = */
+	kd->kpm[1].sc = 0x0B; kd->kpm[1].mod = 0;		/* 00 */
+	kd->kpm[2].sc = 0x0B; kd->kpm[2].mod = 0;		/* 000 */
+	kd->kpm[7].sc = 0x0A; kd->kpm[7].mod = MOD_SHIFT_L;	/* ( */
+	kd->kpm[8].sc = 0x0B; kd->kpm[8].mod = MOD_SHIFT_L;	/* ) */
+	kd->kpm[9].sc = 0x1A; kd->kpm[9].mod = MOD_SHIFT_L;	/* [ */
+	kd->kpm[10].sc = 0x1B; kd->kpm[10].mod = MOD_SHIFT_L;	/* ] */
+	kd->kpm[11].sc = 0x0F; kd->kpm[11].mod = 0;		/* \t */
+	kd->kpm[12].sc = 0x0E; kd->kpm[12].mod = 0;		/* \b */
+	kd->kpm[13].sc = 0x1E; kd->kpm[13].mod = MOD_SHIFT_L;	/* A */
+	kd->kpm[14].sc = 0x30; kd->kpm[14].mod = MOD_SHIFT_L;	/* B */
+	kd->kpm[15].sc = 0x2E; kd->kpm[15].mod = MOD_SHIFT_L;	/* C */
+	kd->kpm[16].sc = 0x20; kd->kpm[16].mod = MOD_SHIFT_L;	/* D */
+	kd->kpm[17].sc = 0x12; kd->kpm[17].mod = MOD_SHIFT_L;	/* E */
+	kd->kpm[18].sc = 0x21; kd->kpm[18].mod = MOD_SHIFT_L;	/* F */
+	kd->kpm[20].sc = 0x07; kd->kpm[20].mod = MOD_SHIFT_L;	/* ^ */
+	kd->kpm[21].sc = 0x06; kd->kpm[21].mod = MOD_SHIFT_L;	/* % */
+	kd->kpm[22].sc = 0x33; kd->kpm[22].mod = MOD_SHIFT_L;	/* < */
+	kd->kpm[23].sc = 0x34; kd->kpm[23].mod = MOD_SHIFT_L;	/* > */
+	kd->kpm[24].sc = 0x08; kd->kpm[24].mod = MOD_SHIFT_L;	/* & */
+	kd->kpm[25].sc = 0x08; kd->kpm[25].mod = MOD_SHIFT_L;	/* && */
+	kd->kpm[26].sc = 0x2B; kd->kpm[26].mod = MOD_SHIFT_L;	/* | */
+	kd->kpm[27].sc = 0x2B; kd->kpm[27].mod = MOD_SHIFT_L;	/* || */
+	kd->kpm[28].sc = 0x27; kd->kpm[28].mod = MOD_SHIFT_L;	/* : */
+	kd->kpm[29].sc = 0x04; kd->kpm[29].mod = MOD_SHIFT_L;	/* # */
+	kd->kpm[30].sc = 0x39; kd->kpm[30].mod = 0;		/* SPACE */
+	kd->kpm[31].sc = 0x03; kd->kpm[31].mod = MOD_SHIFT_L;	/* @ */
+	kd->kpm[32].sc = 0x02; kd->kpm[32].mod = MOD_SHIFT_L;	/* ! */
 }
