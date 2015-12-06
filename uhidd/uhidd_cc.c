@@ -382,7 +382,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 	struct hid_interface *hi;
 	struct hid_field *hf;
 	struct hid_key keycodes[MAX_KEYCODE];
-	unsigned int usage, up;
+	unsigned int usage;
 	int i, value, cnt, flags, total;
 
 	hi = hid_appcol_get_parser_private(ha);
@@ -398,21 +398,29 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		if (flags & HIO_CONST)
 			continue;
 		for (i = 0; i < hf->hf_count; i++) {
-			up = hid_field_get_usage_page(hf);
 			hid_field_get_usage_value(hf, i, &usage, &value);
+
+			/* TODO: Add driver-specific hook here. */
+
+			/* Skip the keys this driver can't handle. */
+			if (HID_PAGE(usage) != HUP_CONSUMER &&
+			    HID_PAGE(usage) != HUP_KEYBOARD)
+				continue;
+
 			if (total >= MAX_KEYCODE)
 				continue;
 			total++;
-			if (up == HUP_CONSUMER &&
+			if (HID_PAGE(usage) == HUP_CONSUMER &&
 			    HID_USAGE(usage) == HUG_VOLUME && value) {
 				cc_process_volume_usage(ha, hr, value);
 				continue;
 			}
+
 			if (value) {
 				if (cnt >= MAX_KEYCODE)
 					continue;
 				keycodes[cnt].code = HID_USAGE(usage);
-				keycodes[cnt].up = up;
+				keycodes[cnt].up = HID_PAGE(usage);
 				cnt++;
 			}
 		}
