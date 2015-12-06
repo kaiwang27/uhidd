@@ -4,6 +4,12 @@ BEGIN {
     printf("const char *\n");
     printf("usage_page(int i)\n");
     printf("{\n");
+    printf("\tif (i >= 0x92 && i <= 0xFEFF) {\n");
+    printf("\t\treturn (\"Reserved\");\n");
+    printf("\t}\n");
+    printf("\tif (i >= 0xFF00 && i <= 0xFFFF) {\n");
+    printf("\t\treturn (\"Vendor\");\n");
+    printf("\t}\n");
     printf("\tswitch(i) {\n");
 }
 

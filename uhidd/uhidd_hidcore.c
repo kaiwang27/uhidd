@@ -576,8 +576,13 @@ hid_parser_dump(struct hid_parser *hp)
 			for (j = 0; j < hf->hf_count; j++) {		\
 				up = HID_PAGE(hf->hf_nusage[j]);	\
 				u = HID_USAGE(hf->hf_nusage[j]);	\
-				printf("        USAGE %s\n",		\
+				printf("        USAGE %s",		\
 				    usage_in_page(up, u));		\
+				if (!strncmp(usage_in_page(up, u),	\
+				    "Unknown Usage",			\
+				    strlen("Unknown Usage")))		\
+					printf("(%#x)", u);		\
+				printf("\n");				\
 			}						\
 		} else {						\
 			printf("[ARRAY]\n");				\

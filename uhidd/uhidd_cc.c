@@ -423,7 +423,8 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		if (cnt == 0)
 			printf("none");
 		for (i = 0; i < cnt; i++)
-			printf("0x%02X ", keycodes[i].code);
+			printf("0x%02X(0x%02X) ", keycodes[i].code,
+			    keycodes[i].up);
 		putchar('\n');
 	}
 
