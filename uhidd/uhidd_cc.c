@@ -376,14 +376,44 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 	}
 }
 
+static void
+cc_process_key(struct hid_appcol *ha, struct hid_report *hr, unsigned usage,
+    int value, int *total, int *cnt, struct hid_key *keycodes)
+{
+
+	/* Skip the keys this driver can't handle. */
+	if (HID_PAGE(usage) != HUP_CONSUMER && HID_PAGE(usage) != HUP_KEYBOARD)
+		return;
+
+	/* "total" counts all keys, pressed and released. */
+	if (*total >= MAX_KEYCODE)
+		return;
+	(*total)++;
+
+	if (HID_PAGE(usage) == HUP_CONSUMER &&
+	    HID_USAGE(usage) == HUG_VOLUME && value) {
+		cc_process_volume_usage(ha, hr, value);
+		return;
+	}
+
+	if (value) {
+		/* "cnt" counts pressed keys. */
+		if (*cnt >= MAX_KEYCODE)
+			return;
+		keycodes[*cnt].code = HID_USAGE(usage);
+		keycodes[*cnt].up = HID_PAGE(usage);
+		(*cnt)++;
+	}
+}
+
 void
 cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 {
 	struct hid_interface *hi;
 	struct hid_field *hf;
 	struct hid_key keycodes[MAX_KEYCODE];
-	unsigned int usage;
-	int i, value, cnt, flags, total;
+	unsigned usage, rusage[8];
+	int i, j, value, cnt, flags, total, r, len;
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
@@ -400,29 +430,25 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 		for (i = 0; i < hf->hf_count; i++) {
 			hid_field_get_usage_value(hf, i, &usage, &value);
 
-			/* TODO: Add driver-specific hook here. */
-
-			/* Skip the keys this driver can't handle. */
-			if (HID_PAGE(usage) != HUP_CONSUMER &&
-			    HID_PAGE(usage) != HUP_KEYBOARD)
-				continue;
-
-			if (total >= MAX_KEYCODE)
-				continue;
-			total++;
-			if (HID_PAGE(usage) == HUP_CONSUMER &&
-			    HID_USAGE(usage) == HUG_VOLUME && value) {
-				cc_process_volume_usage(ha, hr, value);
-				continue;
-			}
-
-			if (value) {
-				if (cnt >= MAX_KEYCODE)
+			/* Driver-specific consumer control key filter. */
+			if (value && hi->cc_recv_filter != NULL) {
+				len = sizeof(rusage);
+				r = hi->cc_recv_filter(ha, usage, value,
+				    rusage, &len);
+				if (r == HID_FILTER_DISCARD)
 					continue;
-				keycodes[cnt].code = HID_USAGE(usage);
-				keycodes[cnt].up = HID_PAGE(usage);
-				cnt++;
+				if (r == HID_FILTER_REPLACE) {
+					assert(len > 0);
+					for (j = 0; j < len; j++)
+						cc_process_key(ha, hr,
+						    rusage[j], 1, &total,
+						    &cnt, keycodes);
+					continue;
+				}
 			}
+
+			cc_process_key(ha, hr, usage, value, &total, &cnt,
+			    keycodes);
 		}
 	}
 

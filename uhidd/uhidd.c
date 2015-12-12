@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010, 2012 Kai Wang
+ * Copyright (c) 2009, 2010, 2012, 2015 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -367,9 +367,10 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	struct LIBUSB20_DEVICE_DESC_DECODED *ddesc;
 	struct LIBUSB20_CONTROL_SETUP_DECODED req;
 	struct hid_interface *hi;
+	struct hid_interface_driver *hd, *mhd;
 	struct libusb20_endpoint *ep;
 	unsigned char rdesc[16384], buf[64];
-	int desc, ds, e, j, pos, size;
+	int desc, ds, e, j, pos, size, match, old_match;
 	uint16_t actlen, buflen;
 
 	/*
@@ -530,6 +531,24 @@ alloc_parent:
 		free(hi);
 		return;
 	}
+
+	/*
+	 * Search for interface-specific driver support.
+	 */
+	mhd = NULL;
+	old_match = 0;
+	for (j = 0; j < hid_interface_driver_num; j++) {
+		hd = &hid_interface_driver_list[j];
+		match = hd->hi_drv_match(hi);
+		if (match != HID_MATCH_NONE) {
+			if (mhd == NULL || match > old_match) {
+				mhd = hd;
+				old_match = match;
+			}
+		}
+	}
+	if (mhd != NULL)
+		mhd->hi_drv_attach(hi);
 
 	STAILQ_INSERT_TAIL(&hilist, hi, next);
 }
@@ -840,6 +859,43 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 	}
 
 	return (0);
+}
+
+int
+hid_match_devid(struct hid_interface *hi, struct uhidd_devid *devid, int sz)
+{
+	int i;
+
+	assert(hi != NULL && devid != NULL);
+
+	for (i = 0; i < sz; i++) {
+		if (hi->vendor_id == devid[i].vendor_id &&
+		    hi->product_id == devid[i].product_id)
+			return (1);
+	}
+
+	return (0);
+}
+
+int
+hid_match_interface(struct hid_interface *hi, int iclass, int isubclass,
+    int iproto)
+{
+
+	assert(hi != NULL);
+
+	if (iclass >= 0 && (uint8_t) iclass != hi->iface->desc.bInterfaceClass)
+		return (0);
+
+	if (isubclass >= 0 &&
+	    (uint8_t) isubclass != hi->iface->desc.bInterfaceSubClass)
+		return (0);
+
+	if (iproto >= 0 && (uint8_t)
+	    iproto != hi->iface->desc.bInterfaceProtocol)
+		return (0);
+
+	return (1);
 }
 
 static void

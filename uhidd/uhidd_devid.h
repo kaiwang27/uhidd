@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2010 Kai Wang
+ * Copyright (c) 2015 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,58 +22,19 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
+ *
+ * $FreeBSD$
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+/*
+ * Vendor ID list.
+ */
 
-#include <sys/param.h>
-#include "uhidd.h"
+#define	USB_VENDOR_MICROSOFT	0x045e
 
-struct hid_appcol_driver hid_appcol_driver_list[] = {
-	/* General Keyboard Driver. */
-	{
-		kbd_match,
-		kbd_attach,
-		kbd_recv,
-		NULL
-	},
 
-	/* General Mouse Driver. */
-	{
-		mouse_match,
-		mouse_attach,
-		mouse_recv,
-		NULL
-	},
+/*
+ * Device ID list.
+ */
 
-	/* Virtual HID Driver. */
-	{
-		vhid_match,
-		vhid_attach,
-		NULL,
-		vhid_recv_raw
-	},
-
-	/* General Consumer Control Driver. */
-	{
-		cc_match,
-		cc_attach,
-		cc_recv,
-		NULL
-	}
-};
-
-const int hid_appcol_driver_num = sizeof(hid_appcol_driver_list) /
-    sizeof(hid_appcol_driver_list[0]);
-
-struct hid_interface_driver hid_interface_driver_list[] = {
-	/* Microsoft input device driver */
-	{
-		microsoft_match,
-		microsoft_attach,
-	},
-};
-
-const int hid_interface_driver_num = sizeof(hid_interface_driver_list) /
-    sizeof(hid_interface_driver_list[0]);
+#define USB_PRODUCT_MICROSOFT_NATURAL4000	0x00db

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009, 2010, 2012 Kai Wang
+ * Copyright (c) 2009, 2010, 2012, 2015 Kai Wang
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
 #define MAXUSAGE 4096
 #define HID_PAGE(u) (((u) >> 16) & 0xffff)
 #define HID_USAGE(u) ((u) & 0xffff)
+#define HID_CUSAGE(u,v) (((u) & 0xffff) << 16 | ((v) & 0xffff))
 
 /*
  * HID Main item kind.
@@ -154,18 +155,6 @@ struct hid_parser {
 	STAILQ_HEAD(, hid_appcol) halist;
 };
 
-#define	HID_MATCH_NONE		0
-#define	HID_MATCH_GHID		5
-#define	HID_MATCH_GENERAL	10
-#define	HID_MATCH_DEVICE	20
-
-struct hid_appcol_driver {
-	int (*ha_drv_match)(struct hid_appcol *);
-	int (*ha_drv_attach)(struct hid_appcol *);
-	void (*ha_drv_recv)(struct hid_appcol *, struct hid_report *);
-	void (*ha_drv_recv_raw)(struct hid_appcol *, uint8_t *, int);
-};
-
 struct hid_key {
 	uint16_t up;
 	uint16_t code;
@@ -206,6 +195,11 @@ struct uhidd_config {
 	STAILQ_HEAD(, device_config) dclist;
 };
 
+struct uhidd_devid {
+	int vendor_id;
+	int product_id;
+};
+
 /*
  * HID parent and child data structures.
  */
@@ -231,7 +225,34 @@ struct hid_interface {
 	uint8_t				 cc_keymap[_MAX_MM_KEY];
 	int				 free_key_pos;
 	pthread_t			 thread;
+	int (*cc_recv_filter)(struct hid_appcol *, unsigned, int, unsigned *,
+	    int *);
 	STAILQ_ENTRY(hid_interface)	 next;
+};
+
+/*
+ * HID driver structures.
+ */
+
+#define	HID_MATCH_NONE		0
+#define	HID_MATCH_GHID		5
+#define	HID_MATCH_GENERAL	10
+#define	HID_MATCH_DEVICE	20
+
+#define HID_FILTER_DISCARD	-1
+#define HID_FILTER_KEEP		0
+#define HID_FILTER_REPLACE	1
+
+struct hid_interface_driver {
+	int (*hi_drv_match)(struct hid_interface *);
+	int (*hi_drv_attach)(struct hid_interface *);
+};
+
+struct hid_appcol_driver {
+	int (*ha_drv_match)(struct hid_appcol *);
+	int (*ha_drv_attach)(struct hid_appcol *);
+	void (*ha_drv_recv)(struct hid_appcol *, struct hid_report *);
+	void (*ha_drv_recv_raw)(struct hid_appcol *, uint8_t *, int);
 };
 
 /*
@@ -267,12 +288,10 @@ extern struct device_config clconfig;
 extern const char *config_file;
 extern int usage_consumer_num;
 extern const char **usage_consumer;
-extern int hid_appcol_driver_num;
-extern struct hid_appcol_driver *hid_appcol_driver_list;
-extern struct hid_appcol_driver *kbd_driver;
-extern struct hid_appcol_driver *mouse_driver;
-extern struct hid_appcol_driver *ghid_driver;
-extern struct hid_appcol_driver *cc_driver;
+extern const int hid_appcol_driver_num;
+extern const int hid_interface_driver_num;
+extern struct hid_appcol_driver hid_appcol_driver_list[];
+extern struct hid_interface_driver hid_interface_driver_list[];
 
 /*
  * Prototypes.
@@ -315,6 +334,9 @@ int		hid_field_get_usage_min(struct hid_field *);
 int		hid_field_get_usage_max(struct hid_field *);
 void		hid_field_set_value(struct hid_field *, int, int);
 int		hid_handle_kernel_driver(struct hid_parser *);
+int		hid_match_devid(struct hid_interface *, struct uhidd_devid *,
+		    int);
+int		hid_match_interface(struct hid_interface *, int, int, int);
 int		kbd_match(struct hid_appcol *);
 int		kbd_attach(struct hid_appcol *);
 int		kbd_hid2key(struct hid_appcol *, struct hid_key, int,
@@ -345,3 +367,5 @@ const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);
 int		vhid_attach(struct hid_appcol *);
 void		vhid_recv_raw(struct hid_appcol *, uint8_t *, int);
+int		microsoft_match(struct hid_interface *);
+int		microsoft_attach(struct hid_interface *);
