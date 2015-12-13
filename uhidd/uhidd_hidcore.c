@@ -391,8 +391,16 @@ hid_parser_init(struct hid_parser *hp)
 				hid_clear_local(hs);
 				break;
 			case 10:	/* Collection */
-				if (dval == 0x01 && collevel == 0) {
-					/* Top-Level Application Collection */
+				if ((dval == 0x01 || dval == 0x03) &&
+				    collevel == 0) {
+					/*
+					 * Top-Level Application Collection.
+					 *
+					 * (we also accept "report" Collection
+					 * which is used by MacBookPro 5.5
+					 * input device to report vendor
+					 * specific data)
+					 */
 					ha = hid_add_appcol(hp, hs->usage);
 				}
 				collevel++;
