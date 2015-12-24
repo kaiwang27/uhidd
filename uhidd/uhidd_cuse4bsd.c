@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <syslog.h>
@@ -136,4 +137,16 @@ ucuse_create_worker(void)
 	}
 
 	return (0);
+}
+
+int
+ucuse_copy_out_string(const char *src, void *peer, int len)
+{
+	char buf[255];
+
+	len = MIN((unsigned) len, sizeof(buf));
+	strlcpy(buf, src, len);
+	len = strlen(buf) + 1;
+
+	return (cuse_copy_out(buf, peer, len));
 }
