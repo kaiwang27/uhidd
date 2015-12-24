@@ -255,14 +255,12 @@ cc_tr(struct hid_appcol *ha, struct hid_key hk, int make,
 		hi->cc_keymap[hk.code] = free_key[hi->free_key_pos];
 		hi->free_key_pos++;
 		cc_write_keymap_file(hi);
-		if (verbose)
-			PRINT1("remembered new hid key map: 0x%x => 0x%02x\n",
-			    hk.code, hi->cc_keymap[hk.code]);
+		PRINT1(1, "remembered new hid key map: 0x%x => 0x%02x\n",
+		    hk.code, hi->cc_keymap[hk.code]);
 		(*c).sc = hi->cc_keymap[hk.code];
 		return (1);
 	} else {
-		if (verbose)
-			PRINT1("no more free key for hid key: 0x%x\n", hk.code);
+		PRINT1(1, "no more free key for hid key: 0x%x\n", hk.code);
 		return (0);
 	}
 }
@@ -365,14 +363,12 @@ cc_process_volume_usage(struct hid_appcol *ha, struct hid_report *hr, int value)
 		keycodes[0].code = key;
 		keycodes[0].up = HUP_CONSUMER;
 		kbd_input(ha, 0, keycodes, total);
-		if (verbose > 1)
-			PRINT1("hid codes: 0x%02X (HUG_VOLUME)\n",
-			    keycodes[0].code);
+		PRINT1(1, "hid codes: 0x%02X (HUG_VOLUME)\n",
+		    keycodes[0].code);
 		/* Key release. */
 		keycodes[0].code = 0;
 		kbd_input(ha, 0, keycodes, total);
-		if (verbose > 1)
-			PRINT1("hid codes: none (HUG_VOLUME)\n");
+		PRINT1(2, "hid codes: none (HUG_VOLUME)\n");
 	}
 }
 
@@ -453,7 +449,7 @@ cc_recv(struct hid_appcol *ha, struct hid_report *hr)
 	}
 
 	if (total > 0 && verbose > 1) {
-		PRINT1("hid codes: ");
+		PRINT1(2, "hid codes: ");
 		if (cnt == 0)
 			printf("none");
 		for (i = 0; i < cnt; i++)

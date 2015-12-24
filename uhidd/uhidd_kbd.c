@@ -690,8 +690,8 @@ kbd_attach(struct hid_appcol *ha)
 	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl: %m",
 		    basename(hi->dev), hi->ndx);
-		if (verbose && errno == ENOENT)
-			PRINT1("vkbd.ko kernel module not loaded?\n");
+		if (errno == ENOENT)
+			PRINT1(1, "vkbd.ko kernel module not loaded?\n");
 		return (-1);
 	}
 
@@ -701,7 +701,8 @@ kbd_attach(struct hid_appcol *ha)
 			    basename(hi->dev), hi->ndx);
 			return (-1);
 		}
-		PRINT1("kbd device name: %s\n", devname(sb.st_rdev, S_IFCHR));
+		PRINT1(1, "kbd device name: %s\n",
+		    devname(sb.st_rdev, S_IFCHR));
 	}
 
 	/*
@@ -764,7 +765,7 @@ kbd_recv(struct hid_appcol *ha, struct hid_report *hr)
 	}
 
 	if (verbose > 1) {
-		PRINT1("mod(0x%02x) key codes: ", mod);
+		PRINT1(2, "mod(0x%02x) key codes: ", mod);
 		for (i = 0; i < cnt; i++)
 			printf("0x%02x ", keycodes[i].code);
 		putchar('\n');
@@ -851,8 +852,7 @@ kbd_status_task(void *arg)
 				break;
 			continue;
 		}
-		if (verbose)
-			PRINT1("kbd status changed: leds=0x%x\n", vs.leds);
+		PRINT1(1, "kbd status changed: leds=0x%x\n", vs.leds);
 		hr = NULL;
 		while ((hr = hid_appcol_get_next_report(ha, hr)) != NULL) {
 			found = 0;
@@ -1083,16 +1083,16 @@ keypad_search_key(struct kbd_dev *kd, int sc, int state, char letter)
 		if (verbose > 2 && !pr) {
 			pr = 1;
 			if (kx[i].sym == '\t')
-				PRINT1("keypad '%s' mapped to scancode %d mod"
-				    " 0x%02x\n", "\\t", kd->kpm[i].sc,
+				PRINT1(3, "keypad '%s' mapped to scancode %d"
+				    " mod 0x%02x\n", "\\t", kd->kpm[i].sc,
 				    kd->kpm[i].mod);
 			else if (kx[i].sym == '\b')
-				PRINT1("keypad '%s' mapped to scancode %d mod"
-				    " 0x%02x\n", "\\b", kd->kpm[i].sc,
+				PRINT1(3, "keypad '%s' mapped to scancode %d"
+				    " mod 0x%02x\n", "\\b", kd->kpm[i].sc,
 				    kd->kpm[i].mod);
 			else
-				PRINT1("keypad '%c' mapped to scancode %d mod"
-				    " 0x%02x\n", kx[i].sym, kd->kpm[i].sc,
+				PRINT1(3, "keypad '%c' mapped to scancode %d"
+				    " mod 0x%02x\n", kx[i].sym, kd->kpm[i].sc,
 				    kd->kpm[i].mod);
 		}
 	}
@@ -1113,8 +1113,7 @@ keypad_parse_keymap(struct kbd_dev *kd, const char *keymap_file)
 	assert(hi != NULL);
 
 	if ((kbdmapin = fopen(keymap_file, "r")) == NULL) {
-		if (verbose > 2)
-			PRINT1("could not open %s", keymap_file);
+		PRINT1(3, "could not open %s", keymap_file);
 		return (-1);
 	}
 
@@ -1192,8 +1191,7 @@ keypad_init(struct kbd_dev *kd)
 	if ((fp = popen(buf, "r")) != NULL) {
 		if ((c = fread(mapfile, 1, sizeof(mapfile) - 1, fp)) > 1) {
 			mapfile[c] = '\0';
-			if (verbose > 2)
-				PRINT1("searching for keymap %s\n", mapfile);
+			PRINT1(3, "searching for keymap %s\n", mapfile);
 			snprintf(buf, sizeof(buf), "%s/%s", KEYMAP_PATH1,
 			    mapfile);
 			if (stat(buf, &sb) == 0) {
@@ -1206,8 +1204,7 @@ keypad_init(struct kbd_dev *kd)
 				found = 1;
 				goto parse_keymap;
 			}
-			if (verbose > 2)
-				PRINT1("keymap %s not exist\n", mapfile);
+			PRINT1(3, "keymap %s not exist\n", mapfile);
 		}
 	}
 
@@ -1219,15 +1216,13 @@ parse_keymap:
 	if (found) {
 		c = keypad_parse_keymap(kd, buf);
 		if (c > 0) {
-			if (verbose > 2)
-				PRINT1("found %d keys for keymap\n", c);
+			PRINT1(3, "found %d keys for keymap\n", c);
 			return;
 		}
 	}
 
 	/* Use the default keymap for English keyboard. */
-	if (verbose > 2)
-		PRINT1("keypad uses default keymap for English keyboard\n");
+	PRINT1(3, "keypad uses default keymap for English keyboard\n");
 
 	kd->kpm[0].sc = 0x0D; kd->kpm[0].mod = 0;		/* = */
 	kd->kpm[1].sc = 0x0B; kd->kpm[1].mod = 0;		/* 00 */

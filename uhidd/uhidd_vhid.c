@@ -98,8 +98,8 @@ vhid_attach(struct hid_appcol *ha)
 	if ((vd->vd_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/uvhidctl: %m",
 		    basename(hi->dev), hi->ndx);
-		if (verbose && errno == ENOENT)
-			PRINT1("uvhid.ko kernel moduel not loaded?\n")
+		if (errno == ENOENT)
+			PRINT1(1, "uvhid.ko kernel moduel not loaded?\n")
 		return (-1);
 	}
 
@@ -117,8 +117,7 @@ vhid_attach(struct hid_appcol *ha)
 		return (-1);
 	}
 
-	if (verbose)
-		PRINT1("vhid device created: %s\n", devname(sb.st_rdev, S_IFCHR));
+	PRINT1(1, "vhid device created: %s\n", devname(sb.st_rdev, S_IFCHR));
 
 	/*
 	 * Set the report descriptor of this virtual hid device.
@@ -177,7 +176,7 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 	assert(vd != NULL);
 
 	if (verbose > 1) {
-		PRINT1("%s received data:", vd->vd_name);
+		PRINT1(2, "%s received data:", vd->vd_name);
 		for (i = 0; i < len; i++)
 			printf(" %u", buf[i]);
 		putchar('\n');
@@ -223,8 +222,8 @@ vhid_task(void *arg)
 			continue;
 		}
 		if (verbose) {
-			PRINT1("%s[%d] vhid_task recevied:", basename(hi->dev),
-			    hi->ndx);
+			PRINT1(1, "%s[%d] vhid_task recevied:",
+			    basename(hi->dev), hi->ndx);
 			for (i = 0; i < len; i++)
 				printf("%d ", buf[i]);
 			putchar('\n');

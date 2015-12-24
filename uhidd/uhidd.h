@@ -259,23 +259,26 @@ struct hid_appcol_driver {
  * Macros used for debugging/error/information output.
  */
 
-#define PRINT0(d, n, ...)						\
+#define PRINT0(v, d, n, ...)						\
 	do {								\
-		char pb[64], pb2[1024];					\
-									\
-		snprintf(pb, sizeof(pb), "%s[%d]", basename(d), n);	\
-		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
-		printf("%s-> %s", pb, pb2);				\
+		if (verbose >= v) {					\
+			char pb[64], pb2[1024];				\
+			snprintf(pb, sizeof(pb), "%s[%d]", basename(d),	\
+			    n);						\
+			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
+			printf("%s-> %s", pb, pb2);			\
+		}							\
 	} while (0)
 
-#define PRINT1(...)							\
+#define PRINT1(v, ...)							\
 	do {								\
-		char pb[64], pb2[1024];					\
-									\
-		snprintf(pb, sizeof(pb), "%s[%d]", basename(hi->dev),	\
-		    hi->ndx);						\
-		snprintf(pb2, sizeof(pb2), __VA_ARGS__);		\
-		printf("%s-> %s", pb, pb2);				\
+		if (verbose >= v) {					\
+			char pb[64], pb2[1024];				\
+			snprintf(pb, sizeof(pb), "%s[%d]",		\
+			    basename(hi->dev), hi->ndx);		\
+			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
+			printf("%s-> %s", pb, pb2);			\
+		}							\
 	} while (0)
 
 /*

@@ -184,8 +184,7 @@ vhid_attach(struct hid_appcol *ha)
 	for (i = 0; i < 2; i++)
 		ucuse_create_worker();
 
-	if (verbose)
-		PRINT1("vhid device created: %s\n", vd->vd_name);
+	PRINT1(1, "vhid device created: %s\n", vd->vd_name);
 
 	/*
 	 * Set the report descriptor of this virtual hid device.
@@ -229,7 +228,7 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 	assert(vd != NULL);
 
 	if (verbose > 1) {
-		PRINT1("%s received data:", vd->vd_name);
+		PRINT1(2, "%s received data:", vd->vd_name);
 		for (i = 0; i < len; i++)
 			printf(" %u", buf[i]);
 		putchar('\n');
@@ -472,7 +471,7 @@ vhid_write(struct cuse_dev *cdev, int fflags, const void *peer_ptr, int len)
 		goto write_done;
 
 	if (verbose) {
-		PRINT1("%s[%d] vhid_task recevied:", basename(hi->dev),
+		PRINT1(1, "%s[%d] vhid_task recevied:", basename(hi->dev),
 		    hi->ndx);
 		for (i = 0; i < len; i++)
 			printf("%d ", buf[i]);

@@ -84,7 +84,8 @@ cc_recv_filter(struct hid_appcol *ha, unsigned usage, int value,
 			*len = c;
 			return (HID_FILTER_REPLACE);
 		} else {
-			PRINT1("unknown value %d for 0xFE05 usage\n", value);
+			PRINT1(0, "unknown value %d for 0xFE05 usage\n",
+			    value);
 			return (HID_FILTER_DISCARD);
 		}
 	}
@@ -109,8 +110,7 @@ int
 microsoft_attach(struct hid_interface *hi)
 {
 
-	if (verbose)
-		PRINT1("Load drv_microsoft driver\n");
+	PRINT1(1, "Load drv_microsoft driver\n");
 	
 	hi->cc_recv_filter = cc_recv_filter;
 

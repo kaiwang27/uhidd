@@ -349,8 +349,7 @@ open_device(const char *dev, struct libusb20_device *pdev)
 	for (i = 0; i < config->num_interface; i++) {
 		iface = &config->interface[i];
 		if (iface->desc.bInterfaceClass == LIBUSB20_CLASS_HID) {
-			if (verbose)
-				PRINT0(dev, i, "HID interface\n");
+			PRINT0(1, dev, i, "HID interface\n");
 			open_iface(dev, pdev, iface, i);
 		}
 	}
@@ -397,8 +396,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	if (j >= libusb20_me_get_1(&iface->extra, pos + 5))
 		return;
 	ds = libusb20_me_get_2(&iface->extra, desc + 1);
-	if (verbose)
-		PRINT0(dev, ndx, "Report descriptor size = %d\n", ds);
+	PRINT0(1, dev, ndx, "Report descriptor size = %d\n", ds);
 	LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 	req.bmRequestType = LIBUSB20_ENDPOINT_IN |
 	    LIBUSB20_REQUEST_TYPE_STANDARD | LIBUSB20_RECIPIENT_INTERFACE;
@@ -417,7 +415,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	 * Dump HID report descriptor in human readable form, if requested.
 	 */
 	if (hidump) {
-		PRINT0(dev, ndx, "Report descriptor dump:\n");
+		PRINT0(0, dev, ndx, "Report descriptor dump:\n");
 		dump_report_desc(rdesc, actlen);
 	}
 
@@ -455,9 +453,8 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 			goto alloc_parent;
 		}
 		if (buf[0] == 1) {
-			if (verbose)
-				PRINT0(dev, ndx, "Interface is in Report "
-				    "Protocol Mode\n");
+			PRINT0(1, dev, ndx, "Interface is in Report "
+			    "Protocol Mode\n");
 			goto alloc_parent;
 		}
 		if (buf[0] != 0) {
@@ -466,7 +463,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 			    (unsigned) buf[0]);
 			goto alloc_parent;
 		}
-		PRINT0(dev, ndx, "Interface is in Boot Protocol Mode, "
+		PRINT0(0, dev, ndx, "Interface is in Boot Protocol Mode, "
 		    "attempt to switch to Report Protocol Mode...\n");
 		LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &req);
 		req.bmRequestType = LIBUSB20_ENDPOINT_OUT |
@@ -484,7 +481,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 			    basename(dev), ndx);
 			goto alloc_parent;
 		}
-		PRINT0(dev, ndx, "Interface SET_PROTOCOL ok.\n");
+		PRINT0(0, dev, ndx, "Interface SET_PROTOCOL ok.\n");
 	}
 
 alloc_parent:
@@ -519,15 +516,13 @@ alloc_parent:
 		    LIBUSB20_ENDPOINT_IN)) {
 			hi->ep = ep->desc.bEndpointAddress;
 			hi->pkt_sz = ep->desc.wMaxPacketSize;
-			if (verbose) {
-				PRINT1("Find IN interrupt ep: %#x", hi->ep);
-				printf(" packet_size=%#x\n", hi->pkt_sz);
-			}
+			PRINT1(1, "Find IN interrupt ep: %#x packet_size="
+			    "%#x\n", hi->ep, hi->pkt_sz);
 			break;
 		}
 	}
 	if (hi->ep == 0) {
-		PRINT1("does not have IN interrupt ep\n");
+		PRINT1(0, "does not have IN interrupt ep\n");
 		free(hi);
 		return;
 	}
@@ -607,29 +602,31 @@ hid_handle_kernel_driver(struct hid_parser *hp)
 	pdev = hi->pdev;
 	ndx = hi->ndx;
 	if (libusb20_dev_kernel_driver_active(pdev, ndx) == 0) {
-		PRINT1("Kernel driver is active\n");
+		PRINT1(0, "Kernel driver is active\n");
 		if (config_detach_kernel_driver(hi) > 0) {
-			if (libusb20_dev_detach_kernel_driver(pdev, ndx) != 0) {
-				PRINT1("Unable to detach kernel driver: "
+			if (libusb20_dev_detach_kernel_driver(pdev, ndx) !=
+			    0) {
+				PRINT1(0, "Unable to detach kernel driver: "
 				    "libusb20_dev_detach_kernel_driver "
 				    "failed\n");
 				if (config_forced_attach(hi) > 0) {
-					PRINT1("Continue anyway\n");
+					PRINT1(0, "Continue anyway\n");
 					return (0);
 				}
 				return (-1);
 			} else
-				PRINT1("kernel driver detached!\n");
+				PRINT1(0, "kernel driver detached!\n");
 		} else {
 			if (config_forced_attach(hi) > 0) {
-				PRINT1("Continue anyway\n");
+				PRINT1(0, "Continue anyway\n");
 				return (0);
 			}
-			PRINT1("Abort attach since kernel driver is active\n");
-			PRINT1("Please try running uhidd with option '-u' to "
-			    "detach the kernel drivers\n");
-			PRINT1("or specify option '-U' to force attaching the"
-			    " interface\n");
+			PRINT1(0, "Abort attach since kernel driver is "
+			    "active\n");
+			PRINT1(0, "Please try running uhidd with option '-u'"
+			    " to detach the kernel drivers\n");
+			PRINT1(0, "or specify option '-U' to force attaching"
+			    " the interface\n");
 			return (-1);
 		}
 	}
@@ -654,8 +651,7 @@ start_hid_interface(void *arg)
 	 * Start receiving data from the endpoint.
 	 */
 
-	if (verbose)
-		PRINT1("HID interface task started\n");
+	PRINT1(1, "HID interface task started\n");
 
 	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
 		syslog(LOG_ERR, "%s[%d] malloc failed\n", basename(hi->dev),
@@ -674,7 +670,7 @@ start_hid_interface(void *arg)
 
 	e = libusb20_tr_open(xfer, _TR_BUFSIZE, 1, hi->ep);
 	if (e == LIBUSB20_ERROR_BUSY) {
-		PRINT1("xfer already opened\n");
+		PRINT1(0, "xfer already opened\n");
 	} else if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
 		    basename(hi->dev), hi->ndx);
@@ -684,7 +680,7 @@ start_hid_interface(void *arg)
 	for (;;) {
 
 		if (libusb20_tr_pending(xfer)) {
-			PRINT1("tr pending\n");
+			PRINT1(0, "tr pending\n");
 			continue;
 		}
 
@@ -694,7 +690,7 @@ start_hid_interface(void *arg)
 
 		for (;;) {
 			if (libusb20_dev_process(hi->pdev) != 0) {
-				PRINT1(" device detached?\n");
+				PRINT1(0, " device detached?\n");
 				goto parent_end;
 			}
 			if (libusb20_tr_pending(xfer) == 0)
@@ -706,7 +702,7 @@ start_hid_interface(void *arg)
 		case 0:
 			actlen = libusb20_tr_get_actual_length(xfer);
 			if (verbose > 2) {
-				PRINT1("received data(%u): ", actlen);
+				PRINT1(3, "received data(%u): ", actlen);
 				for (i = 0; (uint32_t) i < actlen; i++)
 					printf("%02d ", buf[i]);
 				putchar('\n');
@@ -714,12 +710,10 @@ start_hid_interface(void *arg)
 			hid_parser_input_data(hi->hp, buf, actlen);
 			break;
 		case LIBUSB20_TRANSFER_TIMED_OUT:
-			if (verbose)
-				PRINT1("TIMED OUT\n");
+			PRINT1(1, "TIMED OUT\n");
 			break;
 		default:
-			if (verbose)
-				PRINT1("transfer error\n");
+			PRINT1(1, "transfer error\n");
 			break;
 		}
 	}
@@ -728,8 +722,7 @@ parent_end:
 
 	free(buf);
 
-	if (verbose)
-		PRINT1("HID parent exit\n");
+	PRINT1(1, "HID parent exit\n");
 
 	return (NULL);
 }
@@ -763,7 +756,7 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 	}
 	
 	if (libusb20_tr_pending(xfer)) {
-		PRINT1("tr pending\n");
+		PRINT1(0, "tr pending\n");
 		return (-1);
 	}
 
@@ -776,7 +769,7 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 
 		for (;;) {
 			if (libusb20_dev_process(hi->pdev) != 0) {
-				PRINT1(" device detached?\n");
+				PRINT1(0, " device detached?\n");
 				return (-1);
 			}
 			if (libusb20_tr_pending(xfer) == 0)
@@ -788,7 +781,7 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 		case 0:
 			actlen = libusb20_tr_get_actual_length(xfer);
 			if (verbose > 2) {
-				PRINT1("transfered data(%u): ", actlen);
+				PRINT1(2, "transfered data(%u): ", actlen);
 				for (i = 0; (uint32_t) i < actlen; i++)
 					printf("%02d ", buf[i]);
 				putchar('\n');
@@ -796,12 +789,10 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 			break;
 
 		case LIBUSB20_TRANSFER_TIMED_OUT:
-			if (verbose)
-				PRINT1("TIMED OUT\n");
+			PRINT1(1, "TIMED OUT\n");
 			return (-1);
 		default:
-			if (verbose)
-				PRINT1("transfer error\n");
+			PRINT1(1, "transfer error\n");
 			return (-1);
 		}
 
@@ -852,7 +843,7 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 		return (-1);
 	}
 	if (verbose) {
-		PRINT1("set_report: id(%d)", report_id);
+		PRINT1(1, "set_report: id(%d)", report_id);
 		for (i = 0; i < len; i++)
 			printf(" %d", buf[i]);
 		putchar('\n');

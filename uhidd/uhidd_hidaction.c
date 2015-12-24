@@ -129,11 +129,9 @@ match_hidaction(struct hid_appcol *ha, struct hidaction_config *hc)
 					hac->lastused = -1;
 					STAILQ_INSERT_TAIL(&ha->ha_haclist, hac,
 					    next);
-					if (verbose)
-						PRINT1("Found hidaction match "
-						    "for usage %s at (rid:%d "
-						    "pos:%d)\n", hc->usage,
-						    hr->hr_id, hf->hf_pos);
+					PRINT1(1, "Found hidaction match for "
+					    "usage %s at (rid:%d pos:%d)\n",
+					    hc->usage, hr->hr_id, hf->hf_pos);
 				}
 			}
 		}
@@ -217,11 +215,9 @@ docmd:
         }
         *q = 0;
 
-        if (verbose)
-                PRINT1("run_hidaction: system '%s'\n", cmdbuf);
+	PRINT1(1, "run_hidaction: system '%s'\n", cmdbuf);
         r = system(cmdbuf);
-        if (verbose > 1)
-                PRINT1("run_hidaction: return code = 0x%x\n", r);
+	PRINT1(2, "run_hidaction: return code = 0x%x\n", r);
 
 next:
 	hac->conf->lastseen = val;
