@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <libgen.h>
 #include <libusb20.h>
 #include <libusb20_desc.h>
@@ -52,6 +53,16 @@ __FBSDID("$FreeBSD$");
 #include "uhidd.h"
 
 int verbose = 0;
+
+enum options {
+	OPTION_EVDEV,
+	OPTION_EVDEVP,
+};
+
+static struct option longopts[] = {
+	{"evdev", required_argument, NULL, OPTION_EVDEV},
+	{"evdevp", required_argument, NULL, OPTION_EVDEVP},
+};
 
 static int detach = 1;
 static int hidump = 0;
@@ -77,13 +88,14 @@ int
 main(int argc, char **argv)
 {
 	struct hid_interface *hi;
-	char *pid_file;
+	char *pid_file, *p;
 	pid_t otherpid;
 	int e, eval, opt;
 
 	eval = 0;
 
-	while ((opt = getopt(argc, argv, "c:dDhH:kmosuUvV")) != -1) {
+	while ((opt = getopt_long(argc, argv, "c:dDhH:kmosuUvV", longopts,
+	    NULL)) != -1) {
 		switch(opt) {
 		case 'c':
 			config_file = optarg;
@@ -96,19 +108,19 @@ main(int argc, char **argv)
 			detach = 0;
 			break;
 		case 'h':
-			clconfig.vhid_attach = 1;
+			clconfig.vhid_attach = ATTACH_YES;
 			break;
 		case 'H':
 			clconfig.vhid_devname = optarg;
 			break;
 		case 'k':
-			clconfig.kbd_attach = 1;
+			clconfig.kbd_attach = ATTACH_YES;
 			break;
 		case 'm':
-			clconfig.mouse_attach = 1;
+			clconfig.mouse_attach = ATTACH_YES;
 			break;
 		case 'o':
-			clconfig.cc_attach = 1;
+			clconfig.cc_attach = ATTACH_YES;
 			break;
 		case 's':
 			clconfig.vhid_strip_id = 1;
@@ -125,6 +137,48 @@ main(int argc, char **argv)
 			break;
 		case 'V':
 			version();
+			/* NOTREACHED */
+
+		case OPTION_EVDEV:
+			for (p = optarg; *p; p++) {
+				switch (*p) {
+				case 'k':
+					clconfig.kbd_attach = ATTACH_EVDEV;
+					break;
+				case 'm':
+					clconfig.mouse_attach = ATTACH_EVDEV;
+					break;
+				case 'o':
+					clconfig.vhid_attach = ATTACH_EVDEV;
+					break;
+				default:
+					fprintf(stderr, "unknown option '%c'"
+					    " specified in --evdev\n", *p);
+					usage();
+				}
+			}
+			break;
+
+		case OPTION_EVDEVP:
+			for (p = optarg; *p; p++) {
+				switch (*p) {
+				case 'k':
+					clconfig.kbd_attach = ATTACH_EVDEVP;
+					break;
+				case 'm':
+					clconfig.mouse_attach = ATTACH_EVDEVP;
+					break;
+				case 'o':
+					clconfig.vhid_attach = ATTACH_EVDEVP;
+					break;
+				default:
+					fprintf(stderr, "unknown option '%c'"
+					    " specified in --evdevp\n", *p);
+					usage();
+				}
+			}
+			break;
+
 		default:
 			usage();
 		}
@@ -754,7 +808,7 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 		    basename(hi->dev), hi->ndx);
 		return (-1);
 	}
-	
+
 	if (libusb20_tr_pending(xfer)) {
 		PRINT1(0, "tr pending\n");
 		return (-1);

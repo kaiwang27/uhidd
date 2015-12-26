@@ -67,6 +67,8 @@ static struct device_config dconfig, *dconfig_p;
 %token T_HIDACTION
 %token T_DETACHKERNELDRIVER
 %token T_FORCED_ATTACH
+%token T_EVDEV
+%token T_EVDEVP
 %token <val> T_NUM
 %token <val> T_HEX
 %token <str> T_USAGE
@@ -155,28 +157,46 @@ conf_entry
 
 mouse_attach
 	: T_MOUSE_ATTACH "=" T_YES {
-		dconfig.mouse_attach = 1;
+		dconfig.mouse_attach = ATTACH_YES;
 	}
 	| T_MOUSE_ATTACH "=" T_NO {
-		dconfig.mouse_attach = -1;
+		dconfig.mouse_attach = ATTACH_NO;
+	}
+	| T_MOUSE_ATTACH "=" T_EVDEV {
+		dconfig.mouse_attach = ATTACH_EVDEV;
+	}
+	| T_MOUSE_ATTACH "=" T_EVDEVP {
+		dconfig.mouse_attach = ATTACH_EVDEVP;
 	}
 	;
 
 kbd_attach
 	: T_KBD_ATTACH "=" T_YES {
-		dconfig.kbd_attach = 1;
+		dconfig.kbd_attach = ATTACH_YES;
 	}
 	| T_KBD_ATTACH "=" T_NO {
-		dconfig.kbd_attach = -1;
+		dconfig.kbd_attach = ATTACH_NO;
+	}
+	| T_KBD_ATTACH "=" T_EVDEV {
+		dconfig.kbd_attach = ATTACH_EVDEV;
+	}
+	| T_KBD_ATTACH "=" T_EVDEVP {
+		dconfig.kbd_attach = ATTACH_EVDEVP;
 	}
 	;
 
 cc_attach
 	: T_CC_ATTACH "=" T_YES {
-		dconfig.cc_attach = 1;
+		dconfig.cc_attach = ATTACH_YES;
 	}
 	| T_CC_ATTACH "=" T_NO {
-		dconfig.cc_attach = -1;
+		dconfig.cc_attach = ATTACH_NO;
+	}
+	| T_CC_ATTACH "=" T_EVDEV {
+		dconfig.cc_attach = ATTACH_EVDEV;
+	}
+	| T_CC_ATTACH "=" T_EVDEVP {
+		dconfig.cc_attach = ATTACH_EVDEVP;
 	}
 	;
 
@@ -202,10 +222,18 @@ cc_keymap_entry
 
 vhid_attach
 	: T_VHID_ATTACH "=" T_YES {
-		dconfig.vhid_attach = 1;
+		dconfig.vhid_attach = ATTACH_YES;
 	}
 	| T_VHID_ATTACH "=" T_NO {
-		dconfig.vhid_attach = -1;
+		dconfig.vhid_attach = ATTACH_NO;
+	}
+	| T_VHID_ATTACH "=" T_EVDEV {
+		fprintf(stderr, "vhid driver doesn't support 'evdev' attach"
+		    " mode\n");
+	}
+	| T_VHID_ATTACH "=" T_EVDEVP {
+		fprintf(stderr, "vhid driver doesn't support 'evdevp' attach"
+		    " mode\n");
 	}
 	;
 
@@ -367,9 +395,9 @@ config_mouse_attach(struct hid_interface *hi)
 	struct device_config *dc;
 
 	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
-	if (dc != NULL && dc->mouse_attach)
+	if (dc != NULL && dc->mouse_attach != ATTACH_UNKNOWN)
 		return (dc->mouse_attach);
-	if (clconfig.mouse_attach)
+	if (clconfig.mouse_attach != ATTACH_UNKNOWN)
 		return (clconfig.mouse_attach);
 
 	return (uconfig.gconfig.mouse_attach);
@@ -381,9 +409,9 @@ config_kbd_attach(struct hid_interface *hi)
 	struct device_config *dc;
 
 	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
-	if (dc != NULL && dc->kbd_attach)
+	if (dc != NULL && dc->kbd_attach != ATTACH_UNKNOWN)
 		return (dc->kbd_attach);
-	if (clconfig.kbd_attach)
+	if (clconfig.kbd_attach != ATTACH_UNKNOWN)
 		return (clconfig.kbd_attach);
 
 	return (uconfig.gconfig.kbd_attach);
@@ -395,9 +423,9 @@ config_vhid_attach(struct hid_interface *hi)
 	struct device_config *dc;
 
 	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
-	if (dc != NULL && dc->vhid_attach)
+	if (dc != NULL && dc->vhid_attach != ATTACH_UNKNOWN)
 		return (dc->vhid_attach);
-	if (clconfig.vhid_attach)
+	if (clconfig.vhid_attach != ATTACH_UNKNOWN)
 		return (clconfig.vhid_attach);
 
 	return (uconfig.gconfig.vhid_attach);
@@ -409,9 +437,9 @@ config_cc_attach(struct hid_interface *hi)
 	struct device_config *dc;
 
 	dc = config_find_device(hi->vendor_id, hi->product_id, hi->ndx);
-	if (dc != NULL && dc->cc_attach)
+	if (dc != NULL && dc->cc_attach != ATTACH_UNKNOWN)
 		return (dc->cc_attach);
-	if (clconfig.cc_attach)
+	if (clconfig.cc_attach != ATTACH_UNKNOWN)
 		return (clconfig.cc_attach);
 
 	return (uconfig.gconfig.cc_attach);

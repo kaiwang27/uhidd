@@ -72,6 +72,10 @@ forced_attach		{ return (T_FORCED_ATTACH); }
 
 \"[Nn][Oo]\"		{ return (T_NO); }
 
+\"evdev\"		{ return (T_EVDEV); }
+
+\"evdev\+\"		{ return (T_EVDEVP); }
+
 \"[^"]+\"		{
 				yytext[yyleng - 1] = '\0';
 				yylval.str = strdup(yytext + 1);

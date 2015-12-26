@@ -172,20 +172,30 @@ typedef int (*hid_translator)(struct hid_appcol *, struct hid_key, int,
  * Configuration.
  */
 
+enum attach_mode {
+	ATTACH_UNKNOWN = 0,
+	ATTACH_NO,
+	ATTACH_YES,
+	ATTACH_VMS,
+	ATTACH_EVDEV,
+	ATTACH_EVDEVP,
+	ATTACH_DEDEVP_VMS,
+};
+
 struct device_config {
 	int vendor_id;
 	int product_id;
 	int interface;
-	int mouse_attach;
-	int kbd_attach;
-	int vhid_attach;
-	int cc_attach;
-	int cc_keymap_set;
+	enum attach_mode mouse_attach;
+	enum attach_mode kbd_attach;
+	enum attach_mode vhid_attach;
+	enum attach_mode cc_attach;
+	uint8_t cc_keymap_set;
 	uint8_t cc_keymap[_MAX_MM_KEY];
-	int detach_kernel_driver;
-	int vhid_strip_id;
+	int8_t detach_kernel_driver;
+	int8_t forced_attach;
+	int8_t vhid_strip_id;
 	char *vhid_devname;
-	int forced_attach;
 	STAILQ_HEAD(, hidaction_config) haclist;
 	STAILQ_ENTRY(device_config) next;
 };

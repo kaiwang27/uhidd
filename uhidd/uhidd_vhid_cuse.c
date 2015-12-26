@@ -120,7 +120,7 @@ vhid_match(struct hid_appcol *ha)
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 
-	if (config_vhid_attach(hi) <= 0)
+	if (config_vhid_attach(hi) <= ATTACH_NO)
 		return (HID_MATCH_NONE);
 
 	return (HID_MATCH_GHID);

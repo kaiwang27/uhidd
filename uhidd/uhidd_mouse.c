@@ -62,7 +62,7 @@ mouse_match(struct hid_appcol *ha)
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
 
-	if (config_mouse_attach(hi) <= 0)
+	if (config_mouse_attach(hi) <= ATTACH_NO)
 		return (HID_MATCH_NONE);
 
 	u = hid_appcol_get_usage(ha);
