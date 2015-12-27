@@ -50,6 +50,7 @@ __FBSDID("$FreeBSD$");
 #define	BUTTON_MAX	31
 
 struct mouse_dev {
+	struct hid_appcol *ha;
 	int cons_fd;
 };
 
@@ -85,6 +86,7 @@ mouse_attach(struct hid_appcol *ha)
 		syslog(LOG_ERR, "calloc failed in mouse_attach: %m");
 		return (-1);
 	}
+	md->ha = ha;
 
 	hid_appcol_set_private(ha, md);
 
