@@ -147,10 +147,11 @@ hid_parser_attach_drivers(struct hid_parser *hp)
 		if (mhd != NULL) {
 			if (hid_handle_kernel_driver(hp) < 0)
 				break;
-			if (mhd->ha_drv_attach(ha) == 0) {
-				ha->ha_drv = mhd;
+			ha->ha_drv = mhd;			
+			if (mhd->ha_drv_attach(ha) == 0)
 				hp->hp_attached++;
-			}
+			else
+				ha->ha_drv = NULL;
 		}
 	}
 }
@@ -663,6 +664,17 @@ hid_appcol_get_private(struct hid_appcol *ha)
 
 	assert(ha != NULL);
 	return (ha->ha_data);
+}
+
+const char *
+hid_appcol_get_driver_name(struct hid_appcol *ha)
+{
+
+	assert(ha != NULL);
+	if (ha->ha_drv == NULL)
+		return (NULL);
+
+	return (ha->ha_drv->ha_drv_name);
 }
 
 struct hid_report *

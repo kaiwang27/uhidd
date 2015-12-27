@@ -440,6 +440,7 @@ struct keypad_map {
 };
 
 struct kbd_dev {
+	struct hid_appcol *ha;
 	int vkbd_fd;
 	int key_cnt;
 	struct kbd_data ndata;
@@ -448,14 +449,16 @@ struct kbd_dev {
 	pthread_t kbd_status_task;
 	pthread_mutex_t kbd_mtx;
 	void *kbd_context;
+	void *evdev;
 	uint32_t now;
 	int delay1;
 	int delay2;
 	struct keypad_map kpm[kxsize];
+	unsigned char use_vkbd;
+	unsigned char use_evdev;
 	/* Keycode translator. */
 	int (*kbd_tr)(struct hid_appcol *, struct hid_key, int,
 	    struct hid_scancode *, int);
-	struct hid_appcol *ha;
 
 #define KB_DELAY1	500
 #define KB_DELAY2	100
@@ -484,11 +487,34 @@ static struct kbd_mods kbd_mods[KBD_NMOD] = {
 
 static void	*kbd_task(void *arg);
 static void	*kbd_status_task(void *arg);
-static void	kbd_write(struct kbd_dev *kd, struct hid_key hk, int make);
+static void	kbd_write(struct kbd_dev *kd, struct hid_key hk, int make,
+		    int repeat);
+static void	kbd_write_vkbd(struct kbd_dev *kd, struct hid_key hk,
+		    int make);
+static void	kbd_write_evdev(struct kbd_dev *kd, struct hid_key hk,
+		    int make, int repeat);
 static void	kbd_process_keys(struct kbd_dev *kd);
+static void	*kbd_get_hid_interface(void *priv);
+static void	*kbd_get_hid_appcol(void *priv);
+static void	kbd_get_repeat_delay(void *priv, int *delay1, int *delay2);
+static void	kbd_set_repeat_delay(void *priv, int delay1, int delay2);
 static int	keypad_hid2key(struct hid_appcol *ha, struct hid_key hk,
-    int make, struct hid_scancode *c, int len);
+		    int make, struct hid_scancode *c, int len);
+static int	keypad_search_key(struct kbd_dev *kd, int sc, int state,
+		    char letter);
+static int	keypad_parse_keymap(struct kbd_dev *kd,
+		    const char *keymap_file);
 static void	keypad_init(struct kbd_dev *kd);
+
+/*
+ * evdev callbacks.
+ */
+static struct evdev_cb kbd_evdev_cb = {
+	.get_hid_interface = kbd_get_hid_interface,
+	.get_hid_appcol = kbd_get_hid_appcol,
+	.get_repeat_delay = kbd_get_repeat_delay,
+	.set_repeat_delay = kbd_set_repeat_delay,
+};
 
 /*
  * Translate HID code into PS/2 code and put codes into buffer b.
@@ -525,7 +551,7 @@ kbd_hid2key(struct hid_appcol *ha, struct hid_key hk, int make,
 }
 
 static void
-kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
+kbd_write_vkbd(struct kbd_dev *kd, struct hid_key hk, int make)
 {
 	struct hid_scancode c[8];
 	int buf[32], *b, i, n, nk;
@@ -563,12 +589,45 @@ kbd_write(struct kbd_dev *kd, struct hid_key hk, int make)
 }
 
 static void
+kbd_write_evdev(struct kbd_dev *kd, struct hid_key hk, int make, int repeat)
+{
+	struct hid_interface *hi = hid_appcol_get_parser_private(kd->ha);
+	int key;
+
+	/* Ignore unmapped keys. */
+	if ((key = evdev_hid2key(&hk)) < 0) {
+		PRINT1(1, "No evdev keymap for pressed key (%#x)\n",
+		    HID_USAGE2(hk.up, hk.code));
+		return;
+	}
+
+	if (repeat)
+		evdev_report_key_repeat_event(kd->evdev, key);
+	else
+		evdev_report_key_event(kd->evdev, ((hk.up << 16) | hk.code),
+		    key, make);
+
+	evdev_sync_report(kd->evdev);
+}
+
+static void
+kbd_write(struct kbd_dev *kd, struct hid_key hk, int make, int repeat)
+{
+
+	if (kd->use_vkbd)
+		kbd_write_vkbd(kd, hk, make);
+
+	if (kd->use_evdev)
+		kbd_write_evdev(kd, hk, make, repeat);
+}
+
+static void
 kbd_process_keys(struct kbd_dev *kd)
 {
 	uint32_t n_mod;
 	uint32_t o_mod;
 	uint16_t key, up;
-	int dtime, i, j;
+	int dtime, i, j, repeat;
 
 	n_mod = kd->ndata.mod;
 	o_mod = kd->odata.mod;
@@ -577,7 +636,7 @@ kbd_process_keys(struct kbd_dev *kd)
 			if ((n_mod & kbd_mods[i].mask) !=
 			    (o_mod & kbd_mods[i].mask)) {
 				kbd_write(kd, kbd_mods[i].key,
-				    (n_mod & kbd_mods[i].mask));
+				    (n_mod & kbd_mods[i].mask), 0);
 			}
 		}
 	}
@@ -598,7 +657,7 @@ kbd_process_keys(struct kbd_dev *kd)
 				goto rfound;
 			}
 		}
-		kbd_write(kd, kd->odata.keycode[i], 0);
+		kbd_write(kd, kd->odata.keycode[i], 0, 0);
 	rfound:
 		;
 	}
@@ -611,6 +670,7 @@ kbd_process_keys(struct kbd_dev *kd)
 			continue;
 		}
 		kd->ndata.time[i] = kd->now + kd->delay1;
+		repeat = 0;
 		for (j = 0; j < kd->key_cnt; j++) {
 			if (kd->odata.keycode[j].code == 0) {
 				continue;
@@ -627,10 +687,11 @@ kbd_process_keys(struct kbd_dev *kd)
 					goto pfound;
 				}
 				kd->ndata.time[i] = kd->now + kd->delay2;
+				repeat = 1;
 				break;
 			}
 		}
-		kbd_write(kd, kd->ndata.keycode[i], 1);
+		kbd_write(kd, kd->ndata.keycode[i], 1, repeat);
 
 		/*
                  * If any other key is presently down, force its repeat to be
@@ -673,7 +734,8 @@ kbd_attach(struct hid_appcol *ha)
 	struct hid_interface *hi;
 	struct kbd_dev *kd;
 	struct stat sb;
-	unsigned int u;
+	const char *drv_name;
+	enum attach_mode mode;
 
 	hi = hid_appcol_get_parser_private(ha);
 	assert(hi != NULL);
@@ -686,30 +748,63 @@ kbd_attach(struct hid_appcol *ha)
 	hid_appcol_set_private(ha, kd);
 	kd->ha = ha;
 
-	/* Open /dev/vkbdctl. */
-	if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
-		syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl: %m",
-		    basename(hi->dev), hi->ndx);
-		if (errno == ENOENT)
-			PRINT1(1, "vkbd.ko kernel module not loaded?\n");
-		return (-1);
-	}
+	/*
+	 * The keyboard driver can use a vkbd(4) or an evdev interface,
+	 * or both, depending on the configuration.
+	 */
+	drv_name = hid_appcol_get_driver_name(ha);
+	assert(drv_name != NULL);
+	if (strcmp(drv_name, "cc") == 0)
+		mode = config_cc_attach(hi);
+	else
+		mode = config_kbd_attach(hi);
+	assert(mode > ATTACH_NO);
+	if (mode == ATTACH_YES)
+		kd->use_vkbd = 1;
+	else if (mode == ATTACH_EVDEV)
+		kd->use_evdev = 1;
+	else
+		kd->use_vkbd = kd->use_evdev = 1;
 
-	if (verbose) {
-		if (fstat(kd->vkbd_fd, &sb) < 0) {
-			syslog(LOG_ERR, "%s[%d] fstat: /dev/vkbdctl: %m",
-			    basename(hi->dev), hi->ndx);
+	if (kd->use_vkbd) {
+		/* Open /dev/vkbdctl. */
+		if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
+			syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl:"
+			    " %m", basename(hi->dev), hi->ndx);
+			if (errno == ENOENT)
+				PRINT1(1, "vkbd.ko kernel module not "
+				    "loaded?\n");
 			return (-1);
 		}
-		PRINT1(1, "kbd device name: %s\n",
-		    devname(sb.st_rdev, S_IFCHR));
+
+		if (verbose) {
+			if (fstat(kd->vkbd_fd, &sb) < 0) {
+				syslog(LOG_ERR, "%s[%d] fstat: /dev/vkbdctl:"
+				    " %m", basename(hi->dev), hi->ndx);
+				return (-1);
+			}
+			PRINT1(1, "kbd device name: %s\n",
+			    devname(sb.st_rdev, S_IFCHR));
+		}
+
+		/*
+		 * Search the currently installed keymap for the scancodes to
+		 * which we should map the extended keypad keys.
+		 */
+		keypad_init(kd);
 	}
 
-	/*
-	 * Search the currently installed keymap for the scancodes to which
-	 * we should map the extended keypad keys.
-	 */
-	keypad_init(kd);
+	if (kd->use_evdev) {
+		/* Register evdev interface. */
+		kd->evdev = evdev_register_device(kd, &kbd_evdev_cb);
+		if (kd->evdev == NULL) {
+			syslog(LOG_ERR, "%s[%d] could not register evdev "
+			    "device", basename(hi->dev), hi->ndx);
+			return (-1);
+		}
+		PRINT1(1, "kbd evdev device name: %s\n",
+		    evdev_devname(kd->evdev));
+	}
 
 	/* TODO: These should be tunable. */
 	kd->delay1 = KB_DELAY1;
@@ -721,11 +816,10 @@ kbd_attach(struct hid_appcol *ha)
 	pthread_create(&kd->kbd_task, NULL, kbd_task, kd);
 
 	/*
-	 * Only start keyborad status task if it's a real keyboard.
+	 * Only start keyboard status task if it's a real keyboard.
 	 * (e.g. should not start task for comsumer control device)
 	 */
-	u = hid_appcol_get_usage(ha);
-	if (u == HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_KEYBOARD))
+	if (kd->use_vkbd && strcmp(drv_name, "kbd") == 0)
 		pthread_create(&kd->kbd_status_task, NULL, kbd_status_task, ha);
 
 	return (0);
@@ -908,6 +1002,54 @@ kbd_status_task(void *arg)
 
 	return (NULL);
 }
+
+/*
+ * evdev callbacks.
+ */
+
+static void *
+kbd_get_hid_interface(void *priv)
+{
+	struct kbd_dev *kd = priv;
+
+	assert(kd != NULL);
+
+	return (hid_appcol_get_parser_private(kd->ha));
+}
+
+static void *
+kbd_get_hid_appcol(void *priv)
+{
+	struct kbd_dev *kd = priv;
+
+	assert(kd != NULL);
+
+	return (kd->ha);
+}
+
+static void
+kbd_get_repeat_delay(void *priv, int *delay1, int *delay2)
+{
+	struct kbd_dev *kd = priv;
+
+	assert(kd != NULL && delay1 != NULL && delay2 != NULL);
+	*delay1 = kd->delay1;
+	*delay2 = kd->delay2;
+}
+
+static void
+kbd_set_repeat_delay(void *priv, int delay1, int delay2)
+{
+	struct kbd_dev *kd = priv;
+
+	assert(kd != NULL);
+	kd->delay1 = MAX(25, delay1);
+	kd->delay2 = MAX(25, delay2);
+}
+
+/*
+ * Keypad support.
+ */
 
 #undef PUTSC
 #define PUTSC(s, m, n, b)	\

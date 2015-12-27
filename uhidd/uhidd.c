@@ -149,7 +149,7 @@ main(int argc, char **argv)
 					clconfig.mouse_attach = ATTACH_EVDEV;
 					break;
 				case 'o':
-					clconfig.vhid_attach = ATTACH_EVDEV;
+					clconfig.cc_attach = ATTACH_EVDEV;
 					break;
 				default:
 					fprintf(stderr, "unknown option '%c'"
@@ -169,7 +169,7 @@ main(int argc, char **argv)
 					clconfig.mouse_attach = ATTACH_EVDEVP;
 					break;
 				case 'o':
-					clconfig.vhid_attach = ATTACH_EVDEVP;
+					clconfig.cc_attach = ATTACH_EVDEVP;
 					break;
 				default:
 					fprintf(stderr, "unknown option '%c'"

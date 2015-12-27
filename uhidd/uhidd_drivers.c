@@ -33,34 +33,38 @@ __FBSDID("$FreeBSD$");
 struct hid_appcol_driver hid_appcol_driver_list[] = {
 	/* General Keyboard Driver. */
 	{
+		"kbd",
 		kbd_match,
 		kbd_attach,
 		kbd_recv,
-		NULL
+		NULL,
 	},
 
 	/* General Mouse Driver. */
 	{
+		"mouse",
 		mouse_match,
 		mouse_attach,
 		mouse_recv,
-		NULL
+		NULL,
 	},
 
 	/* Virtual HID Driver. */
 	{
+		"vhid",
 		vhid_match,
 		vhid_attach,
 		NULL,
-		vhid_recv_raw
+		vhid_recv_raw,
 	},
 
 	/* General Consumer Control Driver. */
 	{
+		"cc",
 		cc_match,
 		cc_attach,
 		cc_recv,
-		NULL
+		NULL,
 	}
 };
 

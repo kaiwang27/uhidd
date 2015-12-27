@@ -369,10 +369,19 @@ struct hid_interface_driver {
 };
 
 struct hid_appcol_driver {
+	const char *ha_drv_name;
 	int (*ha_drv_match)(struct hid_appcol *);
 	int (*ha_drv_attach)(struct hid_appcol *);
 	void (*ha_drv_recv)(struct hid_appcol *, struct hid_report *);
 	void (*ha_drv_recv_raw)(struct hid_appcol *, uint8_t *, int);
+};
+
+/* evdev callbacks. */
+struct evdev_cb {
+	void *(*get_hid_interface)(void *);
+	void *(*get_hid_appcol)(void *);
+	void (*get_repeat_delay)(void *, int *, int *);
+	void (*set_repeat_delay)(void *, int, int);
 };
 
 /*
@@ -381,10 +390,10 @@ struct hid_appcol_driver {
 
 #define PRINT0(v, d, n, ...)						\
 	do {								\
-		if (verbose >= v) {					\
+		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
 			snprintf(pb, sizeof(pb), "%s[%d]", basename(d),	\
-			    n);						\
+			    (n));					\
 			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
 			printf("%s-> %s", pb, pb2);			\
 		}							\
@@ -392,7 +401,7 @@ struct hid_appcol_driver {
 
 #define PRINT1(v, ...)							\
 	do {								\
-		if (verbose >= v) {					\
+		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
 			snprintf(pb, sizeof(pb), "%s[%d]",		\
 			    basename(hi->dev), hi->ndx);		\
@@ -441,6 +450,7 @@ void		*hid_appcol_get_private(struct hid_appcol *);
 struct hid_report *hid_appcol_get_next_report(struct hid_appcol *,
 		    struct hid_report *);
 void		*hid_appcol_get_parser_private(struct hid_appcol *);
+const char	*hid_appcol_get_driver_name(struct hid_appcol *);
 void		hid_appcol_recv_data(struct hid_appcol *, struct hid_report *,
 		    uint8_t *, int);
 void		hid_appcol_xfer_data(struct hid_appcol *, struct hid_report *);
@@ -491,5 +501,11 @@ const char	*usage_in_page(int, int);
 int		vhid_match(struct hid_appcol *);
 int		vhid_attach(struct hid_appcol *);
 void		vhid_recv_raw(struct hid_appcol *, uint8_t *, int);
+struct evdev_dev *evdev_register_device(void *, struct evdev_cb *);
+void		evdev_report_key_event(struct evdev_dev *, int, int, int);
+void		evdev_report_key_repeat_event(struct evdev_dev *, int);
+void		evdev_sync_report(struct evdev_dev *);
+const char	*evdev_devname(struct evdev_dev *);
+int		evdev_hid2key(struct hid_key *);
 int		microsoft_match(struct hid_interface *);
 int		microsoft_attach(struct hid_interface *);
