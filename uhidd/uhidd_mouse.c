@@ -93,7 +93,7 @@ mouse_attach(struct hid_appcol *ha)
 	md->cons_fd = open("/dev/consolectl", O_RDWR);
 	if (md->cons_fd < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/consolectl: %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
@@ -213,5 +213,5 @@ mouse_recv(struct hid_appcol *ha, struct hid_report *hr)
 
 	if (ioctl(md->cons_fd, CONS_MOUSECTL, &mi) < 0)
 		syslog(LOG_ERR, "%s[%d] could not submit mouse data:"
-		    " ioctl failed: %m", basename(hi->dev), hi->ndx);
+		    " ioctl failed: %m", hi->dev, hi->ndx);
 }

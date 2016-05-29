@@ -770,7 +770,7 @@ kbd_attach(struct hid_appcol *ha)
 		/* Open /dev/vkbdctl. */
 		if ((kd->vkbd_fd = open("/dev/vkbdctl", O_RDWR)) < 0) {
 			syslog(LOG_ERR, "%s[%d] could not open /dev/vkbdctl:"
-			    " %m", basename(hi->dev), hi->ndx);
+			    " %m", hi->dev, hi->ndx);
 			if (errno == ENOENT)
 				PRINT1(1, "vkbd.ko kernel module not "
 				    "loaded?\n");
@@ -780,7 +780,7 @@ kbd_attach(struct hid_appcol *ha)
 		if (verbose) {
 			if (fstat(kd->vkbd_fd, &sb) < 0) {
 				syslog(LOG_ERR, "%s[%d] fstat: /dev/vkbdctl:"
-				    " %m", basename(hi->dev), hi->ndx);
+				    " %m", hi->dev, hi->ndx);
 				return (-1);
 			}
 			PRINT1(1, "kbd device name: %s\n",
@@ -799,7 +799,7 @@ kbd_attach(struct hid_appcol *ha)
 		kd->evdev = evdev_register_device(kd, &kbd_evdev_cb);
 		if (kd->evdev == NULL) {
 			syslog(LOG_ERR, "%s[%d] could not register evdev "
-			    "device", basename(hi->dev), hi->ndx);
+			    "device", hi->dev, hi->ndx);
 			return (-1);
 		}
 		PRINT1(1, "kbd evdev device name: %s\n",

@@ -69,11 +69,11 @@ cc_write_keymap_file(struct hid_interface *hi)
 	int i;
 
 	snprintf(fpath, sizeof(fpath), "/var/run/uhidd.%s/cc_keymap",
-	    basename(hi->dev));
+	    hi->dev);
 	fp = fopen(fpath, "w+");
 	if (fp == NULL) {
 		syslog(LOG_ERR, "%s[%d] fopen %s failed: %m",
-		    basename(hi->dev), hi->ndx, fpath);
+		    hi->dev, hi->ndx, fpath);
 		return;
 	}
 	fprintf(fp, "0x%04x:0x%04x={\n", hi->vendor_id, hi->product_id);
