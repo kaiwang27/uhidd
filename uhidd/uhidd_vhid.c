@@ -97,7 +97,7 @@ vhid_attach(struct hid_appcol *ha)
 	 */
 	if ((vd->vd_fd = open("/dev/uvhidctl", O_RDWR)) < 0) {
 		syslog(LOG_ERR, "%s[%d] could not open /dev/uvhidctl: %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		if (errno == ENOENT)
 			PRINT1(1, "uvhid.ko kernel moduel not loaded?\n")
 		return (-1);
@@ -105,13 +105,13 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (fstat(vd->vd_fd, &sb) < 0) {
 		syslog(LOG_ERR, "%s[%d] fstat: /dev/uvhidctl: %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		close(vd->vd_fd);
 		return (-1);
 	}
 
 	if ((vd->vd_name = strdup(devname(sb.st_rdev, S_IFCHR))) == NULL) {
-		syslog(LOG_ERR, "%s[%d] strdup failed: %m", basename(hi->dev),
+		syslog(LOG_ERR, "%s[%d] strdup failed: %m", hi->dev,
 		    hi->ndx);
 		close(vd->vd_fd);
 		return (-1);
@@ -128,7 +128,7 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (ioctl(vd->vd_fd, USB_SET_REPORT_DESC, &ugd) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_DESC): %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
@@ -147,7 +147,7 @@ vhid_attach(struct hid_appcol *ha)
 
 	if (ioctl(vd->vd_fd, USB_SET_REPORT_ID, &vd->vd_rid) < 0) {
 		syslog(LOG_ERR, "%s[%d] ioctl(USB_SET_REPORT_ID): %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
@@ -155,7 +155,7 @@ vhid_attach(struct hid_appcol *ha)
 	e = pthread_create(&vd->vd_task, NULL, vhid_task, (void *) ha);
 	if (e) {
 		syslog(LOG_ERR, "%s[%d] pthread_create failed: %m",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		close(vd->vd_fd);
 		return (-1);
 	}
@@ -188,7 +188,7 @@ vhid_recv_raw(struct hid_appcol *ha, uint8_t *buf, int len)
 	}
 
 	if (write(vd->vd_fd, buf, len) < 0)
-		syslog(LOG_ERR, "%s[%d] write failed: %m", basename(hi->dev),
+		syslog(LOG_ERR, "%s[%d] write failed: %m", hi->dev,
 		    hi->ndx);
 }
 
@@ -209,7 +209,7 @@ vhid_task(void *arg)
 	assert(vd != NULL);
 
 	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
-		syslog(LOG_ERR, "%s[%d] malloc failed: %m", basename(hi->dev),
+		syslog(LOG_ERR, "%s[%d] malloc failed: %m", hi->dev,
 		    hi->ndx);
 		return (NULL);
 	}
@@ -223,7 +223,7 @@ vhid_task(void *arg)
 		}
 		if (verbose) {
 			PRINT1(1, "%s[%d] vhid_task recevied:",
-			    basename(hi->dev), hi->ndx);
+			    hi->dev, hi->ndx);
 			for (i = 0; i < len; i++)
 				printf("%d ", buf[i]);
 			putchar('\n');

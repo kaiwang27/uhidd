@@ -392,8 +392,7 @@ struct evdev_cb {
 	do {								\
 		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
-			snprintf(pb, sizeof(pb), "%s[%d]", basename(d),	\
-			    (n));					\
+			snprintf(pb, sizeof(pb), "%s[%d]", d, (n));	\
 			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
 			printf("%s-> %s", pb, pb2);			\
 		}							\
@@ -404,7 +403,7 @@ struct evdev_cb {
 		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
 			snprintf(pb, sizeof(pb), "%s[%d]",		\
-			    basename(hi->dev), hi->ndx);		\
+			    hi->dev, hi->ndx);				\
 			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
 			printf("%s-> %s", pb, pb2);			\
 		}							\

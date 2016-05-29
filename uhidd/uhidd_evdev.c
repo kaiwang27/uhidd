@@ -157,7 +157,7 @@ struct evmsg {
 		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
 			snprintf(pb, sizeof(pb), "%s[%d][%s]",		\
-			    basename(hi->dev), hi->ndx, ed->devname);	\
+			    hi->dev, hi->ndx, ed->devname);		\
 			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
 			printf("%s-> %s", pb, pb2);			\
 		}							\
@@ -168,7 +168,7 @@ struct evmsg {
 		if (verbose >= (v)) {					\
 			char pb[64], pb2[1024];				\
 			snprintf(pb, sizeof(pb), "%s[%d][%s][c:%d]",	\
-			    basename(hi->dev), hi->ndx, ed->devname,	\
+			    hi->dev, hi->ndx, ed->devname,		\
 				ec->ndx);				\
 			snprintf(pb2, sizeof(pb2), __VA_ARGS__);	\
 			printf("%s-> %s", pb, pb2);			\

@@ -195,7 +195,7 @@ vhid_attach(struct hid_appcol *ha)
 		vd->vd_rsz = ha->ha_rsz;
 	} else {
 		syslog(LOG_ERR, "%s[%d] report descriptor too big!",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
@@ -471,7 +471,7 @@ vhid_write(struct cuse_dev *cdev, int fflags, const void *peer_ptr, int len)
 		goto write_done;
 
 	if (verbose) {
-		PRINT1(1, "%s[%d] vhid_task recevied:", basename(hi->dev),
+		PRINT1(1, "%s[%d] vhid_task recevied:", hi->dev,
 		    hi->ndx);
 		for (i = 0; i < len; i++)
 			printf("%d ", buf[i]);

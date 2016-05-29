@@ -231,7 +231,7 @@ main(int argc, char **argv)
 
 	STAILQ_INIT(&hilist);
 
-	if (find_device(*argv) < 0) {
+	if (find_device(basename(*argv)) < 0) {
 		eval = 1;
 		goto uhidd_end;
 	}
@@ -288,7 +288,7 @@ create_runtime_dir(void)
 	hi = STAILQ_FIRST(&hilist);
 	if (hi != NULL && hi->dev != NULL) {
 		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
-		    basename(hi->dev));
+		    hi->dev);
 		mkdir(dpath, 0755);
 	}
 }
@@ -304,7 +304,7 @@ remove_runtime_dir(void)
 	hi = STAILQ_FIRST(&hilist);
 	if (hi != NULL && hi->dev != NULL) {
 		snprintf(dpath, sizeof(dpath), "/var/run/uhidd.%s",
-		    basename(hi->dev));
+		    hi->dev);
 		if ((dir = opendir(dpath)) != NULL) {
 			while ((d = readdir(dir)) != NULL) {
 				snprintf(fpath, sizeof(fpath), "%s/%s", dpath,
@@ -343,7 +343,7 @@ find_device(const char *dev)
 	unsigned int bus, addr;
 	int ret;
 
-	if (sscanf(dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+	if (sscanf(dev, "ugen%u.%u", &bus, &addr) < 2) {
 		syslog(LOG_ERR, "%s not found", dev);
 		return (-1);
 	}
@@ -461,7 +461,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 	e = libusb20_dev_request_sync(pdev, &req, rdesc, &actlen, 0, 0);
 	if (e) {
 		syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
-		    " failed", basename(dev), ndx);
+		    " failed", dev, ndx);
 		return;
 	}
 
@@ -496,14 +496,14 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 		e = libusb20_dev_request_sync(pdev, &req, buf, &buflen, 0, 0);
 		if (e) {
 			syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
-			    " failed", basename(dev), ndx);
+			    " failed", dev, ndx);
 			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed",
-			    basename(dev), ndx);
+			    dev, ndx);
 			goto alloc_parent;
 		}
 		if (buflen != 1) {
 			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed: "
-			    "buflen != 1", basename(dev), ndx);
+			    "buflen != 1", dev, ndx);
 			goto alloc_parent;
 		}
 		if (buf[0] == 1) {
@@ -513,7 +513,7 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 		}
 		if (buf[0] != 0) {
 			syslog(LOG_ERR, "%s[%d]=> GET_PROTOCOL failed: "
-			    "invalid data: %u", basename(dev), ndx,
+			    "invalid data: %u", dev, ndx,
 			    (unsigned) buf[0]);
 			goto alloc_parent;
 		}
@@ -530,9 +530,9 @@ open_iface(const char *dev, struct libusb20_device *pdev,
 		e = libusb20_dev_request_sync(pdev, &req, NULL, NULL, 0, 0);
 		if (e) {
 			syslog(LOG_ERR, "%s[%d]=> libusb20_dev_request_sync"
-			    " failed", basename(dev), ndx);
+			    " failed", dev, ndx);
 			syslog(LOG_ERR, "%s[%d]=> SET_PROTOCOL failed",
-			    basename(dev), ndx);
+			    dev, ndx);
 			goto alloc_parent;
 		}
 		PRINT0(0, dev, ndx, "Interface SET_PROTOCOL ok.\n");
@@ -611,7 +611,7 @@ alloc_hid_interface_be(struct hid_interface *hi)
 
 	assert(hi != NULL);
 
-	if (sscanf(hi->dev, "/dev/ugen%u.%u", &bus, &addr) < 2) {
+	if (sscanf(hi->dev, "ugen%u.%u", &bus, &addr) < 2) {
 		syslog(LOG_ERR, "%s not found", hi->dev);
 		return (-1);
 	}
@@ -708,7 +708,7 @@ start_hid_interface(void *arg)
 	PRINT1(1, "HID interface task started\n");
 
 	if ((buf = malloc(_TR_BUFSIZE)) == NULL) {
-		syslog(LOG_ERR, "%s[%d] malloc failed\n", basename(hi->dev),
+		syslog(LOG_ERR, "%s[%d] malloc failed\n", hi->dev,
 		    hi->ndx);
 		goto parent_end;
 	}
@@ -718,7 +718,7 @@ start_hid_interface(void *arg)
 	xfer = libusb20_tr_get_pointer(hi->pdev, x);
 	if (xfer == NULL) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		goto parent_end;
 	}
 
@@ -727,7 +727,7 @@ start_hid_interface(void *arg)
 		PRINT1(0, "xfer already opened\n");
 	} else if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		goto parent_end;
 	}
 
@@ -798,14 +798,14 @@ hid_interrupt_out(void *context, int report_id, char *buf, int len)
 	xfer = libusb20_tr_get_pointer(hi->pdev, x);
 	if (xfer == NULL) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_get_pointer failed\n",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
 	e = libusb20_tr_open(xfer, _TR_BUFSIZE, 1, XXX); /* FIXME */
 	if (e && e != LIBUSB20_ERROR_BUSY) {
 		syslog(LOG_ERR, "%s[%d] libusb20_tr_open failed\n",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 
@@ -888,12 +888,12 @@ hid_set_report(void *context, int report_id, char *buf, int len)
 		e = libusb20_dev_request_sync(hi->pdev, &req, buf, &actlen, 0, 0);
 		if (e && verbose)
 			syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
-			    basename(hi->dev), hi->ndx);
+			    hi->dev, hi->ndx);
 		try++;
 	} while (e && try < _SET_REPORT_RETRY);
 	if (e) {
 		syslog(LOG_ERR, "%s[%d] libusb20_dev_request_sync failed",
-		    basename(hi->dev), hi->ndx);
+		    hi->dev, hi->ndx);
 		return (-1);
 	}
 	if (verbose) {
